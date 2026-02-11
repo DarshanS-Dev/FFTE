@@ -1,0 +1,306 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root {
+    --bg-pure: #000000;
+    --grid-line: #1A1A1A;
+    --charcoal: #333333;
+    --signal-red: #FF0000;
+    --white: #FFFFFF;
+    --text-muted: #888888;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-logo: 'Inter', sans-serif;
+    --font-sans: 'Inter', sans-serif;
+    --border: var(--grid-line);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: var(--font-mono);
+}
+
+body {
+    background-color: var(--bg-pure);
+    background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 50px 50px;
+    color: var(--white);
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+/* Layout Division */
+.high-noir-container {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: stiffReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes stiffReveal {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.left-panel {
+    flex: 0 0 450px;
+    padding: 4rem 3rem;
+    border-right: 1px solid var(--charcoal);
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.right-panel {
+    flex: 1;
+    padding: 4rem 3rem;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+/* Typography */
+h1,
+h2,
+h3 {
+    font-family: 'Inter', sans-serif;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -1px;
+    font-stretch: extra-condensed;
+    /* If supported by font */
+    margin-bottom: 2rem;
+}
+
+.section-label {
+    font-size: 0.8rem;
+    color: var(--white);
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.section-number {
+    color: var(--signal-red);
+    font-size: 1.2rem;
+    margin-right: 10px;
+}
+
+.pulse {
+    animation: signalPulse 1.5s infinite;
+}
+
+@keyframes signalPulse {
+    0% {
+        opacity: 1;
+        text-shadow: 0 0 0px var(--signal-red);
+    }
+
+    50% {
+        opacity: 0.5;
+        text-shadow: 0 0 10px var(--signal-red);
+    }
+
+    100% {
+        opacity: 1;
+        text-shadow: 0 0 0px var(--signal-red);
+    }
+}
+
+/* Components */
+.input-field-wrapper {
+    position: relative;
+    margin-bottom: 2.5rem;
+}
+
+.input-field-wrapper::before {
+    content: '$';
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--signal-red);
+    font-weight: bold;
+}
+
+input {
+    width: 100%;
+    background: var(--bg-pure);
+    border: 1px solid var(--white);
+    border-radius: 0;
+    padding: 15px 15px 15px 35px;
+    color: var(--white);
+    outline: none;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+}
+
+input:focus {
+    border-color: var(--signal-red);
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.2);
+}
+
+.btn-launch {
+    width: 100%;
+    background: var(--white);
+    color: var(--bg-pure);
+    border: none;
+    padding: 20px;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    border-radius: 0;
+}
+
+.btn-launch:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px var(--signal-red);
+    background: var(--white);
+}
+
+/* Terminal Window (Lethal Signal) */
+.terminal-window {
+    background: var(--bg-pure);
+    border: 1px solid var(--signal-red);
+    box-shadow: 0 0 15px rgba(255, 0, 0, 0.3);
+    border-radius: 0;
+    height: calc(100vh - 12rem);
+    display: flex;
+    flex-direction: column;
+}
+
+.terminal-header {
+    padding: 12px;
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--charcoal);
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.dot.red {
+    background: #FF5F56;
+}
+
+.dot.yellow {
+    background: #FFBD2E;
+}
+
+.dot.green {
+    background: #27C93F;
+}
+
+.terminal-body {
+    flex: 1;
+    padding: 20px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    overflow-y: auto;
+    color: var(--white);
+}
+
+.log-entry {
+    margin-bottom: 8px;
+    border-left: 2px solid var(--charcoal);
+    padding-left: 10px;
+}
+
+.log-critical {
+    color: var(--signal-red);
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.log-time {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-right: 10px;
+}
+
+/* Navigation Utilities - High Noir (Synced with Homepage) */
+.noir-nav {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 60px;
+    background: #000000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 2rem;
+    z-index: 1000;
+    border-bottom: 1px solid #1A1A1A;
+}
+
+.nav-logo-section {
+    color: #FFFFFF;
+    font-family: var(--font-logo);
+    font-weight: 900;
+    font-size: 1.25rem;
+    /* text-xl */
+    letter-spacing: -0.05em;
+    /* tracking-tighter */
+    text-transform: uppercase;
+}
+
+.nav-links-section {
+    display: flex;
+    gap: 0.5rem;
+    /* gap-2 */
+    height: 100%;
+}
+
+.noir-nav a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    /* text-xs */
+    font-weight: 700;
+    /* font-bold */
+    letter-spacing: 0.1em;
+    /* tracking-widest */
+    padding: 0 1.5rem;
+    /* px-6 */
+    height: 100%;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+}
+
+.noir-nav a.active {
+    background: var(--signal-red);
+    color: #FFFFFF;
+}
+
+.noir-nav a:hover:not(.active) {
+    color: #FFFFFF;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Hide scrollbar but keep functionality */
+.left-panel::-webkit-scrollbar,
+.right-panel::-webkit-scrollbar,
+.terminal-body::-webkit-scrollbar {
+    width: 4px;
+}
+
+.left-panel::-webkit-scrollbar-thumb,
+.right-panel::-webkit-scrollbar-thumb,
+.terminal-body::-webkit-scrollbar-thumb {
+    background: var(--charcoal);
+}

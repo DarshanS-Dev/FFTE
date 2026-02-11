@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FFTE | COMMAND CENTER</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;900&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <nav class="noir-nav">
+        <div class="nav-logo-section" style="display: flex; align-items: center; gap: 12px;">
+            <img src="assets/logo.png" alt="FFTE" style="height: 48px;">
+        </div>
+        <div class="nav-links-section">
+            <a href="http://localhost:5173">00 HOME</a>
+            <a href="http://localhost:3000/command-center.html" class="active">01 COMMAND CENTER</a>
+            <a href="http://localhost:3000/the-lab.html">02 THE LAB</a>
+            <a href="http://localhost:3000/war-room.html">03 WAR ROOM</a>
+        </div>
+    </nav>
+
+    <div class="high-noir-container">
+        <!-- LEFT PANEL: INPUTS -->
+        <aside class="left-panel">
+            <h1 style="font-size: 3.5rem;">FFTE<br>CORE</h1>
+
+            <div class="input-section">
+                <label class="section-label"><span class="section-number pulse" id="sec-01">01</span>
+                    TARGET_SPEC_URL</label>
+                <div class="input-field-wrapper">
+                    <input type="url" id="target_url" value="http://127.0.0.1:8000/openapi.json" placeholder="SPEC_URL">
+                </div>
+
+                <label class="section-label"><span class="section-number" id="sec-02">02</span> SCAN_IDENTITY</label>
+                <div class="input-field-wrapper">
+                    <input type="text" id="scan_name" placeholder="TEST_ID_ALPHA">
+                </div>
+
+                <label class="section-label"><span class="section-number" id="sec-03">03</span>
+                    FUZZING_INTENSITY</label>
+                <div class="input-field-wrapper">
+                    <input type="number" id="max_cases" value="3" min="1" max="10">
+                </div>
+            </div>
+
+            <button class="btn-launch" onclick="startScan()">
+                LAUNCH SEQUENCE
+            </button>
+
+            <div style="margin-top: 3rem; color: var(--text-muted); font-size: 0.7rem; line-height: 1.8;">
+                [SYSTEM_INFO]<br>
+                ENGINE: FFTE-ORCHESTRATOR-V1<br>
+                STATUS: WAITING_FOR_INPUT...<br>
+                SECURITY: HIGH_NOIR_ENCRYPTED
+            </div>
+        </aside>
+
+        <!-- RIGHT PANEL: TERMINAL -->
+        <main class="right-panel">
+            <h2 style="font-size: 2rem; margin-bottom: 2rem;">RECENT INTELLIGENCE</h2>
+
+            <div class="terminal-window">
+                <div class="terminal-header">
+                    <div class="dot red"></div>
+                    <div class="dot yellow"></div>
+                    <div class="dot green"></div>
+                    <div style="margin-left: auto; font-size: 0.6rem; color: var(--text-muted);">LIVE_SIGNAL_FEED</div>
+                </div>
+                <div class="terminal-body" id="intelligence_feed">
+                    <!-- Logs will be streamed here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+
+</html>

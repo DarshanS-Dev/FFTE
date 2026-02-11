@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FFTE | WAR ROOM</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;900&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <nav class="noir-nav">
+        <div class="nav-logo-section" style="display: flex; align-items: center; gap: 12px;">
+            <img src="assets/logo.png" alt="FFTE" style="height: 48px;">
+        </div>
+        <div class="nav-links-section">
+            <a href="http://localhost:5173">00 HOME</a>
+            <a href="http://localhost:3000/command-center.html">01 COMMAND CENTER</a>
+            <a href="http://localhost:3000/the-lab.html">02 THE LAB</a>
+            <a href="http://localhost:3000/war-room.html" class="active">03 WAR ROOM</a>
+        </div>
+    </nav>
+
+    <div class="high-noir-container">
+        <aside class="left-panel">
+            <h1 style="font-size: 3.5rem;">WAR<br>ROOM</h1>
+
+            <div class="input-section">
+                <label class="section-label">01 TOTAL_TESTS</label>
+                <div style="font-size: 3rem; font-weight: 900; color: var(--white); margin-bottom: 2rem;"
+                    id="total_tests">0</div>
+
+                <label class="section-label">02 CRITICAL_FAILURES</label>
+                <div style="font-size: 3rem; font-weight: 900; color: var(--signal-red); margin-bottom: 2rem;"
+                    id="total_failures">0</div>
+
+                <label class="section-label">03 SURFACES_SCANNED</label>
+                <div style="font-size: 3rem; font-weight: 900; color: var(--white); margin-bottom: 2rem;"
+                    id="endpoints_count">0</div>
+            </div>
+
+            <button class="btn-launch" onclick="window.location.href='http://localhost:3000/command-center.html'">
+                NEW SEQUENCE
+            </button>
+        </aside>
+
+        <main class="right-panel">
+            <h2 style="font-size: 2rem; margin-bottom: 2rem;">FAILURE_LOG</h2>
+
+            <div class="terminal-window" style="height: auto; max-height: 400px; margin-bottom: 2rem;">
+                <div class="terminal-header">
+                    <div class="dot red"></div>
+                    <div class="dot yellow"></div>
+                    <div class="dot green"></div>
+                </div>
+                <div class="terminal-body" id="failures_list">
+                    <!-- Failures will be listed here -->
+                </div>
+            </div>
+
+            <h2 style="font-size: 2rem; margin-bottom: 2rem;">ANALYSIS_REPORT</h2>
+            <div class="terminal-window" style="height: auto; max-height: 400px;">
+                <div class="terminal-body" style="font-size: 0.7rem;">
+                    <pre id="formatted_report" style="white-space: pre-wrap; word-break: break-all;"></pre>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+
+</html>

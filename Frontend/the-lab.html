@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FFTE | THE LAB</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;900&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <nav class="noir-nav">
+        <div class="nav-logo-section" style="display: flex; align-items: center; gap: 12px;">
+            <img src="assets/logo.png" alt="FFTE" style="height: 48px;">
+        </div>
+        <div class="nav-links-section">
+            <a href="http://localhost:5173">00 HOME</a>
+            <a href="http://localhost:3000/command-center.html">01 COMMAND CENTER</a>
+            <a href="http://localhost:3000/the-lab.html" class="active">02 THE LAB</a>
+            <a href="http://localhost:3000/war-room.html">03 WAR ROOM</a>
+        </div>
+    </nav>
+
+    <div class="high-noir-container">
+        <aside class="left-panel">
+            <h1 style="font-size: 3.5rem;">FFTE<br>LABS</h1>
+
+            <div class="input-section">
+                <label class="section-label"><span class="section-number pulse">01</span> ENGINE_STATUS</label>
+                <div style="font-size: 1.5rem; font-weight: 900; margin-bottom: 2rem;" id="status_text">PENDING</div>
+
+                <label class="section-label">PROGRESS_MAP</label>
+                <div style="width: 100%; border: 1px solid var(--white); height: 10px; margin-bottom: 2rem;">
+                    <div id="progress_bar"
+                        style="height: 100%; background: var(--signal-red); width: 0%; transition: width 0.5s ease;">
+                    </div>
+                </div>
+
+                <div style="color: var(--text-muted); font-size: 0.7rem; line-height: 1.8;">
+                    [SEQUENCE_DATA]<br>
+                    MODE: FULL_FUZZ<br>
+                    INJECTION: ACTIVE<br>
+                    LOGGING: ENCRYPTED
+                </div>
+            </div>
+
+            <button id="view_results_btn" class="btn-launch hidden" style="margin-top: 2rem;"
+                onclick="window.location.href='http://localhost:3000/war-room.html'">
+                ANALYZE FAILURES
+            </button>
+        </aside>
+
+        <main class="right-panel">
+            <h2 style="font-size: 2rem; margin-bottom: 2rem;">DISCOVERED SURFACES</h2>
+
+            <div class="terminal-window">
+                <div class="terminal-header">
+                    <div class="dot red"></div>
+                    <div class="dot yellow"></div>
+                    <div class="dot green"></div>
+                </div>
+                <div class="terminal-body" id="endpoints_list">
+                    <!-- Endpoints will be listed here -->
+                    <div class="log-entry">WAITING_FOR_DATA_STREAM...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,24 @@
+﻿python : INFO:     Started 
+server process [20268]
+At line:1 char:59
++ ... dstr :8001; python -c 
+"import uvicorn; src=open('v
+ictim.py').read();  ...
++                 ~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          
+    : NotSpecified: (INFO:  
+       Started server pro   
+ cess [20268]:String) []    
+, RemoteException
+    + FullyQualifiedErrorId 
+    : NativeCommandError
+ 
+INFO:     Waiting for 
+application startup.
+INFO:     Application 
+startup complete.
+INFO:     Uvicorn running 
+on http://127.0.0.1:8000 
+(Press CTRL+C to quit)

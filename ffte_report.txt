@@ -1,0 +1,28 @@
+## client_error (9 occurrence(s))
+
+### Example 1
+curl -X POST "http://127.0.0.1:8000/divide" -d '{}' -H "Content-Type: application/json"
+
+### Example 2
+curl -X POST "http://127.0.0.1:8000/divide" -d '{}' -H "Content-Type: application/json"
+
+### Example 3
+curl -X POST "http://127.0.0.1:8000/divide" -d '{}' -H "Content-Type: application/json"
+
+### Example 4
+curl -X POST "http://127.0.0.1:8000/divide" -d '{}' -H "Content-Type: application/json"
+
+### Example 5
+curl -X POST "http://127.0.0.1:8000/divide" -d '{}' -H "Content-Type: application/json"
+
+### Example 6
+curl -X POST "http://127.0.0.1:8000/divide" -d '{}' -H "Content-Type: application/json"
+
+### Example 7
+curl -X POST "http://127.0.0.1:8000/divide" -d '{}' -H "Content-Type: application/json"
+
+### Example 8
+curl -X POST "http://127.0.0.1:8000/divide" -d '{}' -H "Content-Type: application/json"
+
+### Example 9
+curl -X POST "http://127.0.0.1:8000/divide" -d '{}' -H "Content-Type: application/json"
