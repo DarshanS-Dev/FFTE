@@ -2,3 +2,6 @@ requests
 fastapi
 uvicorn
 pydantic
+sqlmodel
+psycopg2-binary
+python-dotenv

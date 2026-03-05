@@ -83,12 +83,40 @@ def classify(result: "HttpExecutionResult") -> FailureClassification:
             flags=flags,
         )
     
-    # 4. Client error: 4xx status codes (optional to flag as failure)
+    # 4. Smart 4xx handling: some 4xx indicate real bugs
     if result.status_code is not None and 400 <= result.status_code < 500:
         flags["client_error"] = True
+        response_text = ""
+        if result.response_body:
+            if isinstance(result.response_body, bytes):
+                response_text = result.response_body.decode("utf-8", errors="replace").lower()
+            elif isinstance(result.response_body, str):
+                response_text = result.response_body.lower()
+            elif isinstance(result.response_body, (dict, list)):
+                response_text = json.dumps(result.response_body).lower()
+        
+        # These 4xx codes indicate real server-side issues
+        problematic_4xx = [408, 429, 499]
+        if result.status_code in problematic_4xx:
+            return FailureClassification(
+                failure_type=FailureType.CLIENT_ERROR,
+                message=f"Problematic 4xx: {result.status_code}",
+                flags=flags,
+            )
+        
+        # 400 with error traces = server bug, not validation
+        error_indicators = ["exception", "error", "traceback", "stack trace", "internal error"]
+        if result.status_code == 400 and any(ind in response_text for ind in error_indicators):
+            return FailureClassification(
+                failure_type=FailureType.CLIENT_ERROR,
+                message="400 with server error trace",
+                flags=flags,
+            )
+        
+        # All other 4xx = validation working correctly (401, 403, 404, 405, 422, etc.)
         return FailureClassification(
-            failure_type=FailureType.CLIENT_ERROR,
-            message=f"HTTP {result.status_code}",
+            failure_type=FailureType.NONE,
+            message=f"Expected validation rejection: {result.status_code}",
             flags=flags,
         )
     

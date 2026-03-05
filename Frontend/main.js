@@ -240,6 +240,10 @@ async function startScan() {
     const scanName = document.getElementById('scan_name').value;
     const maxCases = document.getElementById('max_cases').value || 3;
 
+    // Get intensity value from the FUZZING_INTENSITY input (#max_cases in the HTML)
+    const intensityInput = document.getElementById('max_cases');
+    const intensityValue = intensityInput ? parseInt(intensityInput.value) || 5 : 5;
+
     if (!targetUrl) {
         await typeLine("ERROR: TARGET_SPEC_URL IS NULL", true);
         alert("Please enter a target URL");
@@ -248,7 +252,7 @@ async function startScan() {
 
     playSuccessSound();
     await typeLine(`INITIATING SCAN: ${scanName || 'UNNAMED_ALPHA'}`);
-    await typeLine(`THREAT LEVEL: ${maxCases > 5 ? 'MAXIMUM' : 'MODERATE'}`);
+    await typeLine(`FUZZING INTENSITY: ${intensityValue}/10`);
 
     const sec01 = document.getElementById('sec-01');
     if (sec01) sec01.classList.add('pulse');
@@ -257,7 +261,8 @@ async function startScan() {
         target_url: targetUrl,
         spec_url: targetUrl,
         scan_name: scanName,
-        max_cases_per_field: parseInt(maxCases)
+        max_cases_per_field: parseInt(maxCases),
+        fuzzing_intensity: intensityValue
     });
 
     if (result.scan_id) {

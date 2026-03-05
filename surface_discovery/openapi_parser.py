@@ -1,21 +1,15 @@
-"""
-OpenAPI spec parser for surface discovery.
-"""
-
+"""OpenAPI spec parser with $ref resolution and robust error handling."""
 from __future__ import annotations
-
 import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
-
 import requests
 
 
 @dataclass
 class Parameter:
-    """OpenAPI parameter specification."""
     name: str
-    location: str  # "path", "query", "header", "cookie"
+    location: str
     param_type: Optional[str] = None
     required: bool = False
     schema: Optional[Dict[str, Any]] = None
@@ -23,9 +17,8 @@ class Parameter:
 
 @dataclass
 class Endpoint:
-    """Represents an API endpoint discovered from OpenAPI spec."""
     path: str
-    method: str  # "get", "post", "put", "delete", etc.
+    method: str
     summary: Optional[str] = None
     parameters: List[Parameter] = None
     request_body_schema: Optional[Dict[str, Any]] = None
@@ -36,88 +29,203 @@ class Endpoint:
             self.parameters = []
 
 
-def fetch_and_parse(openapi_url: str) -> List[Endpoint]:
-    """
-    Fetch OpenAPI spec from URL and parse it into Endpoint objects.
+def resolve_refs(schema: Any, spec: Dict[str, Any]) -> Any:
+    """Resolve all $ref in schema recursively."""
+    if not isinstance(schema, dict):
+        return schema
     
-    Args:
-        openapi_url: URL to OpenAPI spec (e.g., http://localhost:8000/openapi.json)
+    if "$ref" in schema:
+        ref = schema["$ref"]
+        if ref.startswith("#/"):
+            parts = ref[2:].split("/")
+            obj = spec
+            for part in parts:
+                obj = obj.get(part, {})
+            return resolve_refs(obj, spec)
     
+    result = {}
+    for k, v in schema.items():
+        if isinstance(v, dict):
+            result[k] = resolve_refs(v, spec)
+        elif isinstance(v, list):
+            result[k] = [resolve_refs(item, spec) if isinstance(item, dict) else item for item in v]
+        else:
+            result[k] = v
+    return result
+
+
+def _parse_parameters(params_data: Any, spec: Dict[str, Any]) -> List[Parameter]:
+    """Parse parameters from various formats."""
+    if not params_data:
+        return []
+    
+    # Handle if params_data is a list
+    if isinstance(params_data, list):
+        params = []
+        for p in params_data:
+            if not isinstance(p, dict):
+                continue
+            params.append(Parameter(
+                name=p.get("name", ""),
+                location=p.get("in", ""),
+                param_type=p.get("schema", {}).get("type") if isinstance(p.get("schema"), dict) else None,
+                required=p.get("required", False),
+                schema=resolve_refs(p.get("schema", {}), spec) if isinstance(p.get("schema"), dict) else {}
+            ))
+        return params
+    
+    # Handle if params_data is a dict (shouldn't happen but be safe)
+    if isinstance(params_data, dict):
+        return []
+    
+    return []
+
+
+def _parse_request_body(req_body: Any, spec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Parse request body schema from various formats."""
+    if not req_body or not isinstance(req_body, dict):
+        return None
+    
+    content = req_body.get("content", {})
+    if not isinstance(content, dict):
+        return None
+    
+    # Try to find JSON content type
+    for ct, ct_spec in content.items():
+        if not isinstance(ct_spec, dict):
+            continue
+        if "json" in ct.lower():
+            schema = ct_spec.get("schema", {})
+            if isinstance(schema, dict):
+                return resolve_refs(schema, spec)
+    
+    return None
+
+
+def fetch_and_parse(openapi_url: str) -> tuple[List[Endpoint], Optional[str]]:
+    """Fetch and parse OpenAPI spec from URL with robust error handling.
+
     Returns:
-        List of discovered Endpoint objects
+        (endpoints, base_url) – *base_url* is extracted from the spec's
+        ``servers`` (OpenAPI 3.x) or ``host``/``schemes``/``basePath``
+        (OpenAPI 2.0) and may be ``None`` if the spec provides neither.
     """
     try:
         response = requests.get(openapi_url, timeout=10)
         response.raise_for_status()
-        spec = response.json()
-        return _parse_spec(spec)
     except requests.RequestException as e:
         raise ValueError(f"Failed to fetch OpenAPI spec from {openapi_url}: {e}")
+    
+    try:
+        spec = response.json()
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON in OpenAPI spec: {e}")
-
-
-def _parse_spec(spec: Dict[str, Any]) -> List[Endpoint]:
-    """Parse OpenAPI spec dictionary into Endpoint objects."""
-    endpoints = []
+    
+    if not isinstance(spec, dict):
+        raise ValueError("OpenAPI spec must be a JSON object")
+    
+    # --- Extract base URL from spec ---
+    base_url: Optional[str] = None
+    if "servers" in spec and isinstance(spec["servers"], list) and len(spec["servers"]) > 0:
+        base_url = spec["servers"][0].get("url")
+    elif "host" in spec:  # OpenAPI 2.0
+        scheme = spec.get("schemes", ["https"])[0]
+        base_path = spec.get("basePath", "")
+        base_url = f"{scheme}://{spec['host']}{base_path}"
     
     paths = spec.get("paths", {})
-    for path, methods in paths.items():
-        for method, details in methods.items():
-            # Normalize method to lowercase
-            method_lower = method.lower()
+    if not isinstance(paths, dict):
+        raise ValueError("'paths' in OpenAPI spec must be an object")
+    
+    endpoints = []
+    
+    for path, path_item in paths.items():
+        if not isinstance(path_item, dict):
+            print(f"⚠️  Skipping path {path}: path item is not an object")
+            continue
+        
+        # Iterate through HTTP methods
+        for method, operation in path_item.items():
+            # Skip non-method keys like 'summary', 'description', 'parameters', '$ref'
+            if method.lower() not in ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace']:
+                continue
+            
+            # Ensure operation is a dict
+            if not isinstance(operation, dict):
+                print(f"⚠️  Skipping {method.upper()} {path}: operation is not an object")
+                continue
             
             # Parse parameters
-            parameters = []
-            for param_spec in details.get("parameters", []):
-                param = Parameter(
-                    name=param_spec.get("name", ""),
-                    location=param_spec.get("in", ""),
-                    param_type=param_spec.get("schema", {}).get("type"),
-                    required=param_spec.get("required", False),
-                    schema=param_spec.get("schema")
-                )
-                parameters.append(param)
+            params = _parse_parameters(operation.get("parameters", []), spec)
             
             # Parse request body
-            request_body_schema = None
-            request_body = details.get("requestBody", {})
-            if request_body:
-                content = request_body.get("content", {})
-                for content_type, content_spec in content.items():
-                    if "application/json" in content_type or "json" in content_type:
-                        request_body_schema = content_spec.get("schema")
-                        break
+            body_schema = _parse_request_body(operation.get("requestBody"), spec)
             
-            endpoint = Endpoint(
+            endpoints.append(Endpoint(
                 path=path,
-                method=method_lower,
-                summary=details.get("summary"),
-                parameters=parameters,
-                request_body_schema=request_body_schema,
-                operation_id=details.get("operationId")
-            )
-            endpoints.append(endpoint)
+                method=method.lower(),
+                summary=operation.get("summary"),
+                parameters=params,
+                request_body_schema=body_schema,
+                operation_id=operation.get("operationId")
+            ))
     
-    return endpoints
+    if not endpoints:
+        raise ValueError("No valid endpoints found in OpenAPI spec")
+    
+    return endpoints, base_url
 
 
 def parse_from_file(file_path: str) -> List[Endpoint]:
-    """
-    Parse OpenAPI spec from a local file.
+    """Parse OpenAPI spec from a local file."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            # Try JSON first
+            try:
+                spec = json.load(f)
+            except json.JSONDecodeError:
+                # Try YAML
+                f.seek(0)
+                import yaml
+                spec = yaml.safe_load(f)
+    except FileNotFoundError:
+        raise ValueError(f"File not found: {file_path}")
+    except Exception as e:
+        raise ValueError(f"Failed to read file {file_path}: {e}")
     
-    Args:
-        file_path: Path to OpenAPI spec file (JSON or YAML)
+    if not isinstance(spec, dict):
+        raise ValueError("OpenAPI spec must be a JSON/YAML object")
     
-    Returns:
-        List of discovered Endpoint objects
-    """
-    import yaml
+    paths = spec.get("paths", {})
+    if not isinstance(paths, dict):
+        raise ValueError("'paths' in OpenAPI spec must be an object")
     
-    with open(file_path, 'r', encoding='utf-8') as f:
-        if file_path.endswith('.yaml') or file_path.endswith('.yml'):
-            spec = yaml.safe_load(f)
-        else:
-            spec = json.load(f)
+    endpoints = []
     
-    return _parse_spec(spec)
+    for path, path_item in paths.items():
+        if not isinstance(path_item, dict):
+            continue
+        
+        for method, operation in path_item.items():
+            if method.lower() not in ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace']:
+                continue
+            
+            if not isinstance(operation, dict):
+                continue
+            
+            params = _parse_parameters(operation.get("parameters", []), spec)
+            body_schema = _parse_request_body(operation.get("requestBody"), spec)
+            
+            endpoints.append(Endpoint(
+                path=path,
+                method=method.lower(),
+                summary=operation.get("summary"),
+                parameters=params,
+                request_body_schema=body_schema,
+                operation_id=operation.get("operationId")
+            ))
+    
+    if not endpoints:
+        raise ValueError("No valid endpoints found in OpenAPI spec")
+    
+    return endpoints

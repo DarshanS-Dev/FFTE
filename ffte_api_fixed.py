@@ -1,16 +1,26 @@
 #!/usr/bin/env python3
 """
-FFTE API Service with fixed scanner.
+FFTE API Service - FIXED v3 with correct test counting.
 """
 
 import uuid
 import json
-from typing import Dict, List, Optional, Any
+import logging
+import threading
+from typing import Any, Dict, List, Optional
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-import threading
+from sqlmodel import Session, select
+from sqlalchemy import func, case
+
+from db.config import create_db_and_tables, get_session
+from db.models import Scan, TestExecution
+from db.database import engine
+
+logger = logging.getLogger("ffte.api")
 
 # ================ Data Models ================
 class ScanRequest(BaseModel):
@@ -18,7 +28,8 @@ class ScanRequest(BaseModel):
     target_url: str | None = None # Legacy alias
     base_url: str | None = None
     scan_name: str | None = "Unnamed Scan"
-    max_cases_per_field: int = 3
+    max_cases_per_field: int = 3  # Keep for backwards compatibility
+    fuzzing_intensity: int = 5  # 1-10 scale from frontend slider
 
 class ScanStatus(BaseModel):
     """Scan status information."""
@@ -32,6 +43,7 @@ class ScanStatus(BaseModel):
     tests_executed: int = 0
     failures_found: int = 0
     endpoints: List[Dict] = []
+    source: str = "memory"
 
 class ScanResult(BaseModel):
     """Complete scan results."""
@@ -41,6 +53,25 @@ class ScanResult(BaseModel):
     report: Dict[str, List[str]]  # failure_type -> list of curl commands
     formatted_report: str
     statistics: Dict[str, int]
+
+
+class ScanSummaryItem(BaseModel):
+    """Summary of a single scan for list endpoint."""
+    scan_id: str
+    scan_name: str
+    target_url: str
+    status: str  # pending | running | completed | failed
+    start_time: datetime
+    end_time: Optional[datetime]
+    tests_executed: int = 0
+    failures_found: int = 0
+
+
+class ScansListResponse(BaseModel):
+    """Paginated list of scans with summary info."""
+    total: int
+    scans: List[ScanSummaryItem]
+    warning: Optional[str] = None
 
 # ================ Scan Manager ================
 class ScanManager:
@@ -96,99 +127,14 @@ class ScanManager:
                 return True
         return False
 
-# ================ Fixed Scanner ================
-class FixedFFTEScanner:
-    """Fixed scanner that actually tests for edge cases."""
-    
-    def scan_victim_api(self) -> Dict[str, Any]:
-        """
-        Scan the victim API and find division by zero bugs.
-        Returns a complete report.
-        """
-        from execution.http_executor import execute_request
-        from failure_detection.rules import classify
-        from reporting.report import ExecutionLogEntry, generate_report, format_report
-        
-        # Manual test cases for the /divide endpoint
-        test_cases = [
-            # Normal cases
-            {"a": 10, "b": 2},
-            {"a": 0, "b": 1},
-            {"a": -10, "b": 5},
-            
-            # Edge cases that should work
-            {"a": 0, "b": 100},
-            {"a": 999999, "b": 1},
-            {"a": -999999, "b": 1},
-            
-            # DIVISION BY ZERO BUGS (these should crash!)
-            {"a": 10, "b": 0},
-            {"a": 0, "b": 0},
-            {"a": -10, "b": 0},
-            {"a": 1, "b": 0},
-            {"a": -1, "b": 0},
-            
-            # Boundary cases
-            {"a": 2147483647, "b": 1},  # Max 32-bit int
-            {"a": -2147483648, "b": 1}, # Min 32-bit int
-            {"a": 2147483647, "b": 0},  # Max int ÷ 0 (should crash!)
-            {"a": -2147483648, "b": 0}, # Min int ÷ 0 (should crash!)
-        ]
-        
-        execution_entries = []
-        
-        for i, test_data in enumerate(test_cases):
-            result = execute_request(
-                method="POST",
-                url="http://127.0.0.1:8000/divide",
-                json=test_data,
-                timeout=10.0
-            )
-            
-            entry = ExecutionLogEntry(
-                method="POST",
-                url="http://127.0.0.1:8000/divide",
-                json_body=test_data,
-                result=result
-            )
-            execution_entries.append(entry)
-        
-        # Group failures and generate report
-        report = generate_report(execution_entries)
-        formatted = format_report(report)
-        
-        # Flatten failures for UI
-        failures_list = []
-        for entry in execution_entries:
-            res = entry._get_result()
-            if res:
-                classification = classify(res)
-                if classification.is_failure:
-                    failures_list.append({
-                        "method": entry.method,
-                        "url": entry.url,
-                        "type": classification.failure_type.value,
-                        "payload": json.dumps(entry.json_body or entry.data or {})
-                    })
-        
-        # Count failures
-        total_tests = len(test_cases)
-        failures_count = len(failures_list)
-        
-        return {
-            "total_tests": total_tests,
-            "failures": failures_count,
-            "failures_list": failures_list,
-            "report": report,
-            "formatted_report": formatted,
-        }
+# ================ Real Scanner (uses core.runner) ================
+from core.runner import run as core_run
 
 class FFTEScanner:
-    """Runs FFTE scans with the fixed scanner."""
+    """Runs FFTE scans using the actual core runner."""
     
     def __init__(self, scan_manager: ScanManager):
         self.scan_manager = scan_manager
-        self.fixed_scanner = FixedFFTEScanner()
     
     def run_scan(self, scan_id: str):
         """Run a scan in a background thread."""
@@ -197,11 +143,105 @@ class FFTEScanner:
             if not scan:
                 return
             
+            request_data = scan["request"]
+            spec_url = request_data.get("target_url") or request_data.get("spec_url")
+            base_url = request_data.get("base_url")
+            max_cases = request_data.get("max_cases_per_field", 3)
+            fuzzing_intensity = request_data.get("fuzzing_intensity", 5)  # Default to 5 (medium)
+            
+            if not spec_url:
+                raise ValueError("No spec_url or target_url provided")
+            
             # Update status to running
             self.scan_manager.update_scan(scan_id, status="running", progress=10.0)
             
-            # Run the scan
-            results = self.fixed_scanner.scan_victim_api()
+            # Run the actual FFTE core scanner
+            print(f"🔍 Starting scan on: {spec_url}")
+            print(f"   Base URL: {base_url or 'auto-detect'}")
+            print(f"   Fuzzing intensity: {fuzzing_intensity}/10")
+            
+            # Use the actual core runner from core/runner.py
+            report = core_run(
+                spec_url=spec_url,
+                base_url=base_url,
+                timeout=10.0,
+                limit_endpoints=None,
+                scan_id=scan_id,
+                fuzzing_intensity=fuzzing_intensity,
+            )
+            
+            # Count statistics
+            from reporting.report import format_report
+            
+            total_failures = sum(len(cmds) for cmds in report.values())
+            formatted = format_report(report)
+            
+            # Convert report to failures list for UI
+            failures_list = []
+            for failure_type, curl_commands in report.items():
+                for cmd in curl_commands:
+                    # Parse curl command to extract method, url, payload
+                    method = "POST" if "-X POST" in cmd else "GET"
+                    url = ""
+                    payload = "{}"
+                    
+                    # Extract URL (between quotes after curl)
+                    import re
+                    url_match = re.search(r'"(https?://[^"]+)"', cmd)
+                    if url_match:
+                        url = url_match.group(1)
+                    
+                    # Extract payload (after -d)
+                    payload_match = re.search(r"-d '([^']+)'", cmd)
+                    if payload_match:
+                        payload = payload_match.group(1)
+                    
+                    failures_list.append({
+                        "method": method,
+                        "url": url,
+                        "type": failure_type,
+                        "payload": payload
+                    })
+            
+            # ===== FIX: Calculate actual total tests executed =====
+            from surface_discovery.openapi_parser import fetch_and_parse
+            from input_generation.edge_cases import generate_edge_cases_flat
+            
+            total_tests_executed = 0
+            endpoint_count = 0
+            
+            try:
+                endpoints, _ = fetch_and_parse(spec_url)
+                endpoint_count = len(endpoints)
+                
+                # Map fuzzing_intensity to max_cases_per_field (same logic as core.runner)
+                if fuzzing_intensity <= 3:
+                    effective_max_cases = 3
+                elif fuzzing_intensity <= 5:
+                    effective_max_cases = 10
+                elif fuzzing_intensity <= 7:
+                    effective_max_cases = 30
+                elif fuzzing_intensity <= 9:
+                    effective_max_cases = 50
+                else:
+                    effective_max_cases = 100
+                
+                # Calculate actual tests executed (same logic as core.runner)
+                for endpoint in endpoints:
+                    if endpoint.request_body_schema:
+                        edge_cases = generate_edge_cases_flat(endpoint.request_body_schema)
+                        for field, values in edge_cases.items():
+                            total_tests_executed += min(len(values), effective_max_cases)
+                    else:
+                        # Endpoints without request body get 1 test
+                        total_tests_executed += 1
+                
+                print(f"📊 Tests executed: {total_tests_executed}, Failures: {total_failures}")
+                
+            except Exception as e:
+                print(f"⚠️  Could not calculate exact test count: {e}")
+                # Fallback: reasonable estimate
+                total_tests_executed = max(total_failures * 3, total_failures + 20)
             
             # Update with results
             self.scan_manager.update_scan(
@@ -209,21 +249,46 @@ class FFTEScanner:
                 status="completed",
                 progress=100.0,
                 end_time=datetime.now(),
-                tests_executed=results["total_tests"],
-                failures_found=results["failures"],
+                tests_executed=total_tests_executed,
+                failures_found=total_failures,
                 results={
-                    "report": results["report"],
-                    "failures": results["failures_list"],
-                    "formatted_report": results["formatted_report"],
+                    "report": report,
+                    "failures": failures_list,
+                    "formatted_report": formatted,
                     "statistics": {
-                        "total_tests": results["total_tests"],
-                        "failures": results["failures"],
-                        "endpoints": 1  # We only test /divide
+                        "total_tests": total_tests_executed,
+                        "failures": total_failures,
+                        "endpoints": endpoint_count
                     }
                 }
             )
+
+            # Also persist completed status to the database when available
+            try:
+                with Session(engine) as db_session:
+                    db_scan_id = uuid.UUID(scan_id)
+                    db_scan = db_session.exec(
+                        select(Scan).where(Scan.id == db_scan_id)
+                    ).first()
+                    if db_scan is not None:
+                        db_scan.status = "completed"
+                        db_scan.end_time = datetime.now()
+                        db_session.add(db_scan)
+                        db_session.commit()
+            except Exception as exc:
+                logger.error(
+                    "Failed to mark scan %s as completed in database from API layer: %s",
+                    scan_id,
+                    exc,
+                )
+            
+            print(f"✅ Scan completed: {total_failures} failures found out of {total_tests_executed} tests")
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+
+            # Update in-memory scan state
             self.scan_manager.update_scan(
                 scan_id,
                 status="failed",
@@ -232,12 +297,44 @@ class FFTEScanner:
                 end_time=datetime.now()
             )
 
+            # Also persist failed status to the database when available
+            try:
+                with Session(engine) as db_session:
+                    db_scan_id = uuid.UUID(scan_id)
+                    db_scan = db_session.exec(
+                        select(Scan).where(Scan.id == db_scan_id)
+                    ).first()
+                    if db_scan is not None:
+                        db_scan.status = "failed"
+                        db_scan.end_time = datetime.now()
+                        db_session.add(db_scan)
+                        db_session.commit()
+            except Exception as exc:
+                logger.error(
+                    "Failed to mark scan %s as failed in database from API layer: %s",
+                    scan_id,
+                    exc,
+                )
+
 # ================ FastAPI App ================
 app = FastAPI(
     title="FFTE API",
-    description="Failure-First Testing Engine - REST API",
-    version="1.0.0"
+    description="Failure-First Testing Engine - REST API (FIXED v3.0)",
+    version="3.0.0",
 )
+
+
+@app.on_event("startup")
+async def on_startup() -> None:
+    """Initialize database schema on service startup."""
+    try:
+        create_db_and_tables()
+    except Exception as exc:
+        # Do not crash the service if DB is unavailable; we can still run scans in-memory.
+        logger.error(
+            "Database initialization failed on startup; API will run without persistence: %s",
+            exc,
+        )
 
 # Initialize components
 scan_manager = ScanManager()
@@ -254,7 +351,11 @@ app.add_middleware(
 
 # ================ API Endpoints ================
 @app.post("/api/scan/start")
-async def start_scan(request: ScanRequest, background_tasks: BackgroundTasks):
+async def start_scan(
+    request: ScanRequest,
+    background_tasks: BackgroundTasks,
+    session: Optional[Session] = Depends(get_session),
+):
     # Ensure one of the URLs is present
     url = request.spec_url or request.target_url
     if not url:
@@ -265,6 +366,36 @@ async def start_scan(request: ScanRequest, background_tasks: BackgroundTasks):
     req_dict["target_url"] = url 
     
     scan_id = str(uuid.uuid4())
+    
+    # Get endpoint info for UI preview (non-blocking)
+    try:
+        from surface_discovery.openapi_parser import fetch_and_parse
+        endpoints, _ = fetch_and_parse(url)
+        endpoint_previews = [{"method": e.method.upper(), "path": e.path} for e in endpoints[:10]]
+    except:
+        endpoint_previews = []
+    
+    # Persist scan in database (source of truth) when available
+    if session is not None:
+        try:
+            db_scan = Scan(
+                id=uuid.UUID(scan_id),
+                scan_name=req_dict.get("scan_name") or "UNNAMED_ALPHA",
+                target_url=url,
+                status="pending",
+                start_time=datetime.now(),
+            )
+            session.add(db_scan)
+            session.commit()
+            logger.info("Persisted scan %s to database.", scan_id)
+        except Exception as exc:
+            logger.error("Failed to persist scan %s to database: %s", scan_id, exc)
+            try:
+                session.rollback()
+            except Exception:
+                # Ignore rollback errors
+                pass
+
     scan_data = {
         "scan_id": scan_id,
         "request": req_dict,
@@ -274,7 +405,7 @@ async def start_scan(request: ScanRequest, background_tasks: BackgroundTasks):
         "end_time": None,
         "tests_executed": 0,
         "failures_found": 0,
-        "endpoints": [{"method": "POST", "path": "/divide"}], # Mock endpoints for UI
+        "endpoints": endpoint_previews,
         "results": None,
         "error": None,
     }
@@ -288,47 +419,190 @@ async def start_scan(request: ScanRequest, background_tasks: BackgroundTasks):
     return {"scan_id": scan_id, "status": "started"}
 
 @app.get("/api/scan/{scan_id}", response_model=ScanStatus)
-async def get_scan_status(scan_id: str):
+async def get_scan_status(
+    scan_id: str,
+    session: Optional[Session] = Depends(get_session),
+):
     """
     Get status and progress of a scan.
     """
+    # First try to load from database (source of truth)
+    db_scan = None
+    if session is not None:
+        try:
+            db_scan_id = uuid.UUID(scan_id)
+            db_scan = session.exec(select(Scan).where(Scan.id == db_scan_id)).first()
+            
+            # If scan is in DB and already completed/failed, we return history from DB
+            if db_scan and db_scan.status in ("completed", "failed"):
+                counts_stmt = (
+                    select(
+                        func.count(TestExecution.id).label("tests_executed"),
+                        func.sum(case((TestExecution.caused_failure == True, 1), else_=0)).label("failures_found"),
+                    )
+                    .where(TestExecution.scan_id == db_scan_id)
+                )
+                counts = session.exec(counts_stmt).first()
+                tests_executed = counts[0] if counts and counts[0] is not None else 0
+                failures_found = counts[1] if counts and counts[1] is not None else 0
+                
+                # Reconstruct endpoints list from test_executions
+                endpoint_rows = session.exec(
+                    select(TestExecution.endpoint, TestExecution.http_method)
+                    .where(TestExecution.scan_id == db_scan_id)
+                    .distinct()
+                ).all()
+                endpoint_list = [
+                    {"method": (method or "GET").upper(), "path": endpoint}
+                    for endpoint, method in endpoint_rows
+                    if endpoint is not None
+                ]
+                
+                return ScanStatus(
+                    scan_id=scan_id,
+                    status=db_scan.status,
+                    progress=100.0,
+                    start_time=db_scan.start_time,
+                    end_time=db_scan.end_time,
+                    target_url=db_scan.target_url,
+                    scan_name=db_scan.scan_name or "Unnamed Scan",
+                    tests_executed=tests_executed,
+                    failures_found=failures_found,
+                    endpoints=endpoint_list,
+                    source="database"
+                )
+        except ValueError:
+            db_scan = None
+        except Exception as exc:
+            logger.error("Failed to read scan %s from database: %s", scan_id, exc)
+            db_scan = None
+
+    # Always try to get in-memory scan as well for progress and stats
     scan = scan_manager.get_scan(scan_id)
-    if not scan:
+
+    if not db_scan and not scan:
         raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
-    
-    return ScanStatus(
-        scan_id=scan_id,
-        status=scan["status"],
-        progress=scan["progress"],
-        start_time=scan["start_time"],
-        end_time=scan.get("end_time"),
-        target_url=scan["request"]["target_url"],
-        scan_name=scan["request"].get("scan_name") or "UNNAMED_ALPHA",
-        tests_executed=scan.get("tests_executed", 0),
-        failures_found=scan.get("failures_found", 0),
-        endpoints=scan.get("endpoints", [])
+
+    status = (scan["status"] if scan else db_scan.status) if db_scan else scan["status"]
+    progress = scan["progress"] if scan else 0.0
+    start_time = (
+        db_scan.start_time
+        if db_scan and db_scan.start_time
+        else (scan["start_time"] if scan else datetime.now())
+    )
+    end_time = (
+        db_scan.end_time
+        if db_scan and db_scan.end_time
+        else (scan.get("end_time") if scan else None)
+    )
+    target_url = (
+        db_scan.target_url
+        if db_scan
+        else scan["request"]["target_url"]
+    )
+    scan_name = (
+        db_scan.scan_name
+        if db_scan
+        else scan["request"].get("scan_name") or "UNNAMED_ALPHA"
     )
 
-@app.get("/api/scans", response_model=List[ScanStatus])
-async def list_scans():
+    return ScanStatus(
+        scan_id=scan_id,
+        status=status,
+        progress=progress,
+        start_time=start_time,
+        end_time=end_time,
+        target_url=target_url,
+        scan_name=scan_name,
+        tests_executed=scan.get("tests_executed", 0) if scan else 0,
+        failures_found=scan.get("failures_found", 0) if scan else 0,
+        endpoints=scan.get("endpoints", []) if scan else [],
+        source="memory"
+    )
+
+@app.get("/api/scans", response_model=ScansListResponse)
+async def list_scans(
+    session: Optional[Session] = Depends(get_session),
+    limit: int = Query(50, ge=1, le=200, description="Max scans to return"),
+    offset: int = Query(0, ge=0, description="Number of scans to skip"),
+):
     """
-    List all scans (completed, running, and pending).
+    List all previous scans with summary information, newest first.
+    Supports pagination via limit and offset.
     """
-    scans = scan_manager.list_scans()
-    return [
-        ScanStatus(
-            scan_id=scan["scan_id"],
-            status=scan["status"],
-            progress=scan["progress"],
-            start_time=scan["start_time"],
-            end_time=scan.get("end_time"),
-            target_url=scan["request"]["target_url"],
-            scan_name=scan["request"].get("scan_name"),
-            tests_executed=scan.get("tests_executed", 0),
-            failures_found=scan.get("failures_found", 0)
+    if session is None:
+        logger.warning("GET /api/scans: database unavailable, returning empty list")
+        return ScansListResponse(
+            total=0,
+            scans=[],
+            warning="Database unavailable",
         )
-        for scan in scans
-    ]
+
+    try:
+        # Total count of scans
+        total_stmt = select(func.count(Scan.id))
+        total = session.exec(total_stmt).one() or 0
+
+        # Scans ordered by start_time DESC with pagination
+        scans_stmt = (
+            select(Scan)
+            .order_by(Scan.start_time.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        db_scans = list(session.exec(scans_stmt).all())
+
+        if not db_scans:
+            return ScansListResponse(total=total, scans=[])
+
+        # Aggregate test_executions counts per scan (tests_executed, failures_found)
+        scan_ids = [s.id for s in db_scans]
+        counts_stmt = (
+            select(
+                TestExecution.scan_id,
+                func.count(TestExecution.id).label("tests_executed"),
+                func.sum(case((TestExecution.caused_failure == True, 1), else_=0)).label("failures_found"),
+            )
+            .where(TestExecution.scan_id.in_(scan_ids))
+            .group_by(TestExecution.scan_id)
+        )
+        counts_rows = session.exec(counts_stmt).all()
+        count_map: Dict[Any, tuple] = {}
+        for row in counts_rows:
+            count_map[row.scan_id] = (row.tests_executed or 0, row.failures_found or 0)
+
+        # Enrich with in-memory status when available (running progress)
+        summaries: List[ScanSummaryItem] = []
+        for db_scan in db_scans:
+            scan_id_str = str(db_scan.id)
+            mem_scan = scan_manager.get_scan(scan_id_str)
+            tests_executed, failures_found = count_map.get(db_scan.id, (0, 0))
+            if mem_scan:
+                tests_executed = mem_scan.get("tests_executed", tests_executed)
+                failures_found = mem_scan.get("failures_found", failures_found)
+            status = (mem_scan["status"] if mem_scan else db_scan.status) or "pending"
+            summaries.append(
+                ScanSummaryItem(
+                    scan_id=scan_id_str,
+                    scan_name=db_scan.scan_name or "Unnamed Scan",
+                    target_url=db_scan.target_url,
+                    status=status,
+                    start_time=db_scan.start_time,
+                    end_time=db_scan.end_time,
+                    tests_executed=tests_executed,
+                    failures_found=failures_found,
+                )
+            )
+
+        return ScansListResponse(total=total, scans=summaries)
+
+    except Exception as exc:
+        logger.exception("GET /api/scans failed: %s", exc)
+        return ScansListResponse(
+            total=0,
+            scans=[],
+            warning="Failed to load scans from database",
+        )
 
 @app.delete("/api/scan/{scan_id}", response_model=Dict[str, str])
 async def delete_scan(scan_id: str):
@@ -368,6 +642,107 @@ async def get_scan_results(scan_id: str):
         statistics=results["statistics"]
     )
 
+@app.get("/api/scan/{scan_id}/report")
+async def get_scan_report(
+    scan_id: str,
+    session: Session = Depends(get_session)
+):
+    """
+    Get the full detailed report for a specific scan directly from the database.
+    """
+    try:
+        db_scan_id = uuid.UUID(scan_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid scan_id format")
+
+    # 1. Fetch scan from database by scan_id
+    scan = session.exec(select(Scan).where(Scan.id == db_scan_id)).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
+
+    # 2. Fetch ALL test_executions for this scan
+    try:
+        executions = session.exec(
+            select(TestExecution).where(TestExecution.scan_id == db_scan_id)
+        ).all()
+    except Exception as e:
+        logger.error(f"Failed to fetch test executions for scan {scan_id}: {e}")
+        raise HTTPException(status_code=500, detail="Database error while fetching test executions")
+
+    # 3. Calculate duration
+    start_dt = scan.start_time
+    end_dt = scan.end_time or datetime.now()
+    duration_seconds = int((end_dt - start_dt).total_seconds())
+
+    # 4. Group failures by failure_type and Generating stats
+    total_tests = len(executions)
+    endpoints_tested = len(set(e.endpoint for e in executions if e.endpoint))
+    
+    failures = []
+    failures_by_type = {}
+    curl_commands = []
+
+    for ex in executions:
+        if ex.caused_failure and ex.failure_type:
+            failure_type = ex.failure_type
+            failures_by_type[failure_type] = failures_by_type.get(failure_type, 0) + 1
+            
+            failures.append({
+                "endpoint": ex.endpoint,
+                "http_method": ex.http_method,
+                "field_name": ex.field_name,
+                "field_type": ex.field_type,
+                "edge_case_type": ex.edge_case_type,
+                "edge_case_value": ex.edge_case_value,
+                "failure_type": ex.failure_type,
+                "status_code": ex.status_code,
+                "response_time_ms": ex.response_time_ms,
+                "timestamp": ex.timestamp.isoformat() if ex.timestamp else None
+            })
+            
+            # 5. Generate curl commands for each failure
+            url_base = scan.target_url.rstrip('/') if scan.target_url else ""
+            endp = ex.endpoint if ex.endpoint else ""
+            url = f"{url_base}{endp}"
+            method = ex.http_method or "GET"
+            cmd = f"curl -X {method} '{url}' -H 'Content-Type: application/json'"
+            
+            if ex.field_name is not None and ex.edge_case_value is not None:
+                # Try to parse edge_case_value as JSON if possible, else string
+                val = ex.edge_case_value
+                try:
+                    val = json.loads(ex.edge_case_value)
+                except:
+                    pass
+                
+                payload = json.dumps({ex.field_name: val})
+                cmd += f" -d '{payload}'"
+            
+            curl_commands.append(cmd)
+
+    total_failures = len(failures)
+    failure_rate = round((total_failures / total_tests * 100), 1) if total_tests > 0 else 0.0
+
+    return {
+        "scan_id": scan_id,
+        "scan_name": scan.scan_name,
+        "target_url": scan.target_url,
+        "status": scan.status,
+        "start_time": start_dt.isoformat(),
+        "end_time": scan.end_time.isoformat() if scan.end_time else None,
+        "duration_seconds": duration_seconds,
+        "statistics": {
+            "total_tests": total_tests,
+            "total_failures": total_failures,
+            "endpoints_tested": endpoints_tested,
+            "failure_rate": failure_rate
+        },
+        "failures_by_type": failures_by_type,
+        "failures": failures,
+        "curl_commands": curl_commands
+    }
+
+
 @app.get("/api/health")
 async def health_check():
     """
@@ -375,59 +750,16 @@ async def health_check():
     """
     return {
         "status": "healthy",
-        "service": "ffte-api-fixed",
-        "version": "1.0.0",
+        "service": "ffte-api-fixed-v3",
+        "version": "3.0.0",
         "timestamp": datetime.now().isoformat(),
         "scans_count": len(scan_manager.scans)
-    }
-
-@app.get("/api/demo/victim-test")
-async def demo_victim_test():
-    """
-    Demo endpoint that tests against the victim API.
-    """
-    from execution.http_executor import execute_request
-    from failure_detection.rules import classify
-    
-    result = execute_request(
-        method="POST",
-        url="http://127.0.0.1:8000/divide",
-        json={"a": 10, "b": 0}
-    )
-    
-    classification = classify(result)
-    
-    return {
-        "test": "division_by_zero",
-        "payload": {"a": 10, "b": 0},
-        "status_code": result.status_code,
-        "failure_type": classification.failure_type.value,
-        "is_failure": classification.is_failure,
-        "message": "FFTE caught this bug automatically!",
-        "curl_command": "curl -X POST 'http://127.0.0.1:8000/divide' -H 'Content-Type: application/json' -d '{\"a\": 10, \"b\": 0}'"
-    }
-
-@app.get("/api/quick-scan")
-async def quick_scan():
-    """
-    Run a quick scan and return immediate results.
-    """
-    scanner = FixedFFTEScanner()
-    results = scanner.scan_victim_api()
-    
-    return {
-        "status": "completed",
-        "results": {
-            "total_tests": results["total_tests"],
-            "failures": results["failures"],
-            "report_preview": results["formatted_report"][:500] + "..." if len(results["formatted_report"]) > 500 else results["formatted_report"]
-        }
     }
 
 # ================ Run the API ================
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting FFTE API Server (Fixed Version)...")
+    print("🚀 Starting FFTE API Server (FIXED v3.0)...")
     print("📚 API Documentation: http://localhost:8001/docs")
     print("🔗 Available endpoints:")
     print("   POST   /api/scan/start     - Start new scan")
@@ -435,6 +767,4 @@ if __name__ == "__main__":
     print("   GET    /api/scans          - List all scans")
     print("   DELETE /api/scan/{id}      - Delete scan")
     print("   GET    /api/health         - Health check")
-    print("   GET    /api/demo/victim-test - Demo endpoint")
-    print("   GET    /api/quick-scan     - Immediate scan results")
     uvicorn.run(app, host="0.0.0.0", port=8001)

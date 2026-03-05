@@ -1,46 +1,78 @@
-#!/usr/bin/env python3
-"""
-Simple test that bypasses edge case generation.
-"""
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import Optional
 
-import requests
-import json
-from execution.http_executor import execute_request
-from failure_detection.rules import classify
+app = FastAPI(title="Vulnerable Demo API")
 
-# Direct test cases
-test_cases = [
-    {"a": 10, "b": 2},    # Should work
-    {"a": 10, "b": 0},    # Should crash (division by zero)
-    {"a": 0, "b": 0},     # Should crash
-    {"a": -1, "b": 0},    # Should crash
-    {"a": 999999999, "b": 0},  # Should crash
-]
 
-print("=" * 60)
-print("🧪 Direct FFTE Test - Bypassing edge case generation")
-print("=" * 60)
+# -----------------------
+# Models
+# -----------------------
 
-for i, test_data in enumerate(test_cases, 1):
-    print(f"\nTest {i}: {test_data}")
-    
-    result = execute_request(
-        method="POST",
-        url="http://127.0.0.1:8000/divide",
-        json=test_data
-    )
-    
-    classification = classify(result)
-    
-    if classification.is_failure:
-        print(f"❌ FAILURE: {classification.failure_type}")
-        print(f"   Status: {result.status_code}")
-        print(f"   Response: {result.response_body}")
-        print(f"   Exception: {result.exception}")
-    else:
-        print(f"✓ OK: HTTP {result.status_code}")
-        print(f"   Result: {result.response_body}")
+class CalculateRequest(BaseModel):
+    a: int
+    b: int
 
-print("\n" + "=" * 60)
-print("🎯 Division by zero bug found!")
-print("=" * 60)
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    age: int
+
+
+class TransferRequest(BaseModel):
+    amount: float
+    from_account: str
+    to_account: str
+
+
+# -----------------------
+# Endpoints
+# -----------------------
+
+# 1️⃣ Division endpoint (Division by Zero vulnerability)
+@app.post("/divide")
+def divide(data: CalculateRequest):
+    result = data.a / data.b  # ❌ No zero check
+    return {"result": result}
+
+
+# 2️⃣ Large factorial (Crash with big numbers)
+@app.post("/factorial")
+def factorial(data: CalculateRequest):
+    def fact(n):
+        if n == 0:
+            return 1
+        return n * fact(n - 1)  # ❌ No recursion limit protection
+
+    return {"result": fact(data.a)}
+
+
+# 3️⃣ Registration (No validation)
+@app.post("/register")
+def register(data: RegisterRequest):
+    if len(data.password) < 3:
+        raise ValueError("Password too short")  # ❌ Raises unhandled error
+
+    return {
+        "message": "User registered",
+        "username": data.username
+    }
+
+
+# 4️⃣ Money transfer (Negative amount bug)
+@app.post("/transfer")
+def transfer(data: TransferRequest):
+    # ❌ No negative validation
+    new_balance = 1000 - data.amount
+    return {
+        "from": data.from_account,
+        "to": data.to_account,
+        "new_balance": new_balance
+    }
+
+
+# 5️⃣ Health check (Stable endpoint)
+@app.get("/health")
+def health():
+    return {"status": "ok"}
