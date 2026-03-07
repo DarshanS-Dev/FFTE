@@ -27,6 +27,7 @@ from failure_detection.rules import classify
 from sqlmodel import Session
 from db.config import engine
 from db.models import TestExecution, Scan
+from ml.predictor import predict_failure_probability
 
 logger = logging.getLogger("ffte.core.runner")
 
@@ -237,79 +238,101 @@ def run(
                 p for p in endpoint.parameters if p.location == "query"
             ]
             if query_param_list:
+                # Pass 1 — score all query-param cases
+                scored_params = []
                 for qp in query_param_list:
                     for ec_type, ec_value in QUERY_PARAM_EDGE_CASES[:max_cases_per_field]:
-                        fuzzed_params = {
-                            p.name: _safe_default_for_param(p)
-                            for p in query_param_list
-                        }
-                        fuzzed_params[qp.name] = ec_value
+                        ml_score = predict_failure_probability(
+                            http_method=endpoint.method.upper(),
+                            field_type=qp.schema.get("type") if qp.schema else None,
+                            edge_case_type=ec_type,
+                            is_required=qp.required,
+                            field_name=qp.name,
+                        )
+                        scored_params.append((qp, ec_type, ec_value, ml_score))
 
-                        result = execute_request(
+                # Sort highest risk first
+                scored_params.sort(key=lambda x: x[3], reverse=True)
+
+                # Pass 2 — execute in sorted order
+                for qp, ec_type, ec_value, ml_score in scored_params:
+                    fuzzed_params = {
+                        p.name: _safe_default_for_param(p)
+                        for p in query_param_list
+                    }
+                    fuzzed_params[qp.name] = ec_value
+
+                    logger.debug(
+                        "ML score for %s %s field=%s ec=%s: %.3f",
+                        endpoint.method, endpoint.path, qp.name, ec_type, ml_score,
+                    )
+
+                    result = execute_request(
+                        method=endpoint.method,
+                        url=url,
+                        timeout=timeout,
+                        params=fuzzed_params,
+                        json=None,
+                    )
+
+                    # Persist query-param test execution
+                    if db_session is not None and db_scan_uuid is not None:
+                        try:
+                            classification = classify(result)
+                            caused_failure = classification.is_failure
+                            failure_type = (
+                                classification.failure_type.value
+                                if caused_failure
+                                else None
+                            )
+                            response_time_ms = (
+                                result.latency_seconds * 1000.0
+                                if result.latency_seconds is not None
+                                else None
+                            )
+
+                            if not ec_type:
+                                logger.warning(
+                                    "edge_case_type is None for param %s"
+                                    " — this row will be invisible in reports",
+                                    qp.name,
+                                )
+
+                            exec_record = TestExecution(
+                                scan_id=db_scan_uuid,
+                                endpoint=endpoint.path,
+                                http_method=endpoint.method.lower(),
+                                field_name=qp.name,
+                                field_type=qp.schema.get("type") if qp.schema else None,
+                                is_required=qp.required,
+                                edge_case_type=ec_type,
+                                edge_case_value=str(ec_value),
+                                status_code=result.status_code,
+                                failure_type=failure_type,
+                                caused_failure=caused_failure,
+                                ml_failure_probability=ml_score,
+                                response_time_ms=response_time_ms,
+                                timestamp=datetime.utcnow(),
+                            )
+                            db_session.add(exec_record)
+                            db_session.commit()
+                        except Exception as exc:
+                            logger.error(
+                                "Failed to persist TestExecution for scan %s: %s",
+                                db_scan_uuid,
+                                exc,
+                            )
+                            db_session.rollback()
+
+                    entries.append(
+                        ExecutionLogEntry(
                             method=endpoint.method,
                             url=url,
-                            timeout=timeout,
                             params=fuzzed_params,
-                            json=None,
+                            json_body=None,
+                            result=result,
                         )
-
-                        # Persist query-param test execution
-                        if db_session is not None and db_scan_uuid is not None:
-                            try:
-                                classification = classify(result)
-                                caused_failure = classification.is_failure
-                                failure_type = (
-                                    classification.failure_type.value
-                                    if caused_failure
-                                    else None
-                                )
-                                response_time_ms = (
-                                    result.latency_seconds * 1000.0
-                                    if result.latency_seconds is not None
-                                    else None
-                                )
-
-                                if not ec_type:
-                                    logger.warning(
-                                        "edge_case_type is None for param %s"
-                                        " — this row will be invisible in reports",
-                                        qp.name,
-                                    )
-
-                                exec_record = TestExecution(
-                                    scan_id=db_scan_uuid,
-                                    endpoint=endpoint.path,
-                                    http_method=endpoint.method.lower(),
-                                    field_name=qp.name,
-                                    field_type=qp.schema.get("type") if qp.schema else None,
-                                    is_required=qp.required,
-                                    edge_case_type=ec_type,
-                                    edge_case_value=str(ec_value),
-                                    status_code=result.status_code,
-                                    failure_type=failure_type,
-                                    caused_failure=caused_failure,
-                                    response_time_ms=response_time_ms,
-                                    timestamp=datetime.utcnow(),
-                                )
-                                db_session.add(exec_record)
-                                db_session.commit()
-                            except Exception as exc:
-                                logger.error(
-                                    "Failed to persist TestExecution for scan %s: %s",
-                                    db_scan_uuid,
-                                    exc,
-                                )
-                                db_session.rollback()
-
-                        entries.append(
-                            ExecutionLogEntry(
-                                method=endpoint.method,
-                                url=url,
-                                params=fuzzed_params,
-                                json_body=None,
-                                result=result,
-                            )
-                        )
+                    )
 
             # --- BODY FUZZING ---
             if endpoint.request_body_schema:
@@ -317,70 +340,97 @@ def run(
                     endpoint.request_body_schema, root_spec=raw_spec
                 )
 
+                # Pass 1 — score all body-field cases
+                scored_cases = []
                 for field, values in edge_cases.items():
-                    for v in values[:max_cases_per_field]:  # dynamic limit from intensity
-                        try:
-                            json_body = generate_sample_object(
-                                endpoint.request_body_schema,
-                                {field: v},
-                            )
-                        except Exception:
-                            json_body = {}
+                    for v in values[:max_cases_per_field]:
+                        ec_type_str = classify_edge_case_type(v)
+                        ml_score = predict_failure_probability(
+                            http_method=endpoint.method.upper(),
+                            field_type=endpoint.request_body_schema.get(
+                                "properties", {}
+                            ).get(field, {}).get("type"),
+                            edge_case_type=ec_type_str,
+                            is_required=field in (
+                                endpoint.request_body_schema.get("required") or []
+                            ),
+                            field_name=field,
+                        )
+                        scored_cases.append((field, v, ec_type_str, ml_score))
 
-                        result = execute_request(
+                # Sort highest risk first
+                scored_cases.sort(key=lambda x: x[3], reverse=True)
+
+                # Pass 2 — execute in sorted order
+                for field, v, ec_type_str, ml_score in scored_cases:
+                    logger.debug(
+                        "ML score for %s %s field=%s ec=%s: %.3f",
+                        endpoint.method, endpoint.path, field, ec_type_str, ml_score,
+                    )
+
+                    try:
+                        json_body = generate_sample_object(
+                            endpoint.request_body_schema,
+                            {field: v},
+                        )
+                    except Exception:
+                        json_body = {}
+
+                    result = execute_request(
+                        method=endpoint.method,
+                        url=url,
+                        timeout=timeout,
+                        params=query_params if query_params else None,
+                        json=json_body,
+                    )
+
+                    # Persist execution details per test case when DB is available
+                    if db_session is not None and db_scan_uuid is not None:
+                        try:
+                            classification = classify(result)
+                            caused_failure = classification.is_failure
+                            failure_type = classification.failure_type.value if caused_failure else None
+                            response_time_ms = (
+                                result.latency_seconds * 1000.0
+                                if result.latency_seconds is not None
+                                else None
+                            )
+
+                            exec_record = TestExecution(
+                                scan_id=db_scan_uuid,
+                                endpoint=endpoint.path,
+                                http_method=endpoint.method.lower(),
+                                field_name=field,
+                                field_type=None,
+                                is_required=None,
+                                edge_case_type=ec_type_str,
+                                edge_case_value=str(v),
+                                status_code=result.status_code,
+                                failure_type=failure_type,
+                                caused_failure=caused_failure,
+                                ml_failure_probability=ml_score,
+                                response_time_ms=response_time_ms,
+                                timestamp=datetime.utcnow(),
+                            )
+                            db_session.add(exec_record)
+                            db_session.commit()
+                        except Exception as exc:
+                            logger.error(
+                                "Failed to persist TestExecution for scan %s: %s",
+                                db_scan_uuid,
+                                exc,
+                            )
+                            db_session.rollback()
+
+                    entries.append(
+                        ExecutionLogEntry(
                             method=endpoint.method,
                             url=url,
-                            timeout=timeout,
                             params=query_params if query_params else None,
-                            json=json_body,
+                            json_body=json_body,
+                            result=result,
                         )
-
-                        # Persist execution details per test case when DB is available
-                        if db_session is not None and db_scan_uuid is not None:
-                            try:
-                                classification = classify(result)
-                                failure_type = classification.failure_type.value if caused_failure else None
-                                caused_failure = classification.is_failure
-                                response_time_ms = (
-                                    result.latency_seconds * 1000.0
-                                    if result.latency_seconds is not None
-                                    else None
-                                )
-
-                                exec_record = TestExecution(
-                                    scan_id=db_scan_uuid,
-                                    endpoint=endpoint.path,
-                                    http_method=endpoint.method.lower(),
-                                    field_name=field,
-                                    field_type=None,
-                                    is_required=None,
-                            edge_case_type=classify_edge_case_type(v),
-                                    edge_case_value=str(v),
-                                    status_code=result.status_code,
-                                    failure_type=failure_type,
-                                    caused_failure=caused_failure,
-                                    response_time_ms=response_time_ms,
-                                    timestamp=datetime.utcnow(),
-                                )
-                                db_session.add(exec_record)
-                                db_session.commit()
-                            except Exception as exc:
-                                logger.error(
-                                    "Failed to persist TestExecution for scan %s: %s",
-                                    db_scan_uuid,
-                                    exc,
-                                )
-                                db_session.rollback()
-
-                        entries.append(
-                            ExecutionLogEntry(
-                                method=endpoint.method,
-                                url=url,
-                                params=query_params if query_params else None,
-                                json_body=json_body,
-                                result=result,
-                            )
-                        )
+                    )
             elif not query_param_list:
                 # Endpoints without request body or query params
                 result = execute_request(

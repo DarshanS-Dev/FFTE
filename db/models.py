@@ -48,6 +48,7 @@ class TestExecution(SQLModel, table=True):
     status_code: Optional[int] = Field(default=None, index=True)
     failure_type: Optional[str] = Field(default=None, index=True)
     caused_failure: Optional[bool] = Field(default=None, index=True)
+    ml_failure_probability: Optional[float] = Field(default=None)
     response_time_ms: Optional[float] = Field(default=None, index=True)
     timestamp: datetime = Field(
         default_factory=datetime.utcnow,

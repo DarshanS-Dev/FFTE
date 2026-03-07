@@ -52,6 +52,7 @@ class ScanResult(BaseModel):
     report: Dict[str, List[str]]  # failure_type -> list of curl commands
     formatted_report: str
     statistics: Dict[str, int]
+    ml_insights: Optional[Dict] = None  # avg probability, high/low risk counts
 
 
 class ScanSummaryItem(BaseModel):
@@ -606,31 +607,58 @@ async def delete_scan(scan_id: str):
         raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
 
 @app.get("/api/scan/{scan_id}/results", response_model=ScanResult)
-async def get_scan_results(scan_id: str):
+async def get_scan_results(
+    scan_id: str,
+    session: Optional[Session] = Depends(get_session),
+):
     """
     Get detailed results of a completed scan.
     """
     scan = scan_manager.get_scan(scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
-    
+
     if scan["status"] != "completed":
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=f"Scan {scan_id} is not completed. Status: {scan['status']}"
         )
-    
+
     if not scan.get("results"):
         raise HTTPException(status_code=404, detail=f"No results found for scan {scan_id}")
-    
+
     results = scan["results"]
+
+    # --- Compute ml_insights from DB rows for this scan ---
+    ml_insights: Optional[Dict] = None
+    if session is not None:
+        try:
+            db_scan_id = uuid.UUID(scan_id)
+            ml_rows = session.exec(
+                select(TestExecution.ml_failure_probability)
+                .where(TestExecution.scan_id == db_scan_id)
+            ).all()
+            scores = [s for s in ml_rows if s is not None]
+            if scores:
+                avg_prob = round(sum(scores) / len(scores), 4)
+                high_risk = sum(1 for s in scores if s > 0.7)
+                low_risk  = sum(1 for s in scores if s < 0.3)
+                ml_insights = {
+                    "avg_failure_probability": avg_prob,
+                    "high_risk_count": high_risk,
+                    "low_risk_count": low_risk,
+                }
+        except Exception as exc:
+            logger.warning("Could not compute ml_insights for scan %s: %s", scan_id, exc)
+
     return ScanResult(
         scan_id=scan_id,
         status=scan["status"],
         failures=results.get("failures", []),
         report=results["report"],
         formatted_report=results["formatted_report"],
-        statistics=results["statistics"]
+        statistics=results["statistics"],
+        ml_insights=ml_insights,
     )
 
 @app.get("/api/scan/{scan_id}/report")
@@ -688,6 +716,7 @@ async def get_scan_report(
                 "failure_type": ex.failure_type,
                 "status_code": ex.status_code,
                 "response_time_ms": ex.response_time_ms,
+                "ml_failure_probability": ex.ml_failure_probability,
                 "timestamp": ex.timestamp.isoformat() if ex.timestamp else None
             })
             
@@ -714,6 +743,21 @@ async def get_scan_report(
     total_failures = len(failures)
     failure_rate = round((total_failures / total_tests * 100), 1) if total_tests > 0 else 0.0
 
+    # --- ml_insights ---
+    scores = [
+        ex.ml_failure_probability
+        for ex in executions
+        if ex.ml_failure_probability is not None
+    ]
+    if scores:
+        ml_insights = {
+            "avg_failure_probability": round(sum(scores) / len(scores), 4),
+            "high_risk_count": sum(1 for s in scores if s > 0.7),
+            "low_risk_count":  sum(1 for s in scores if s < 0.3),
+        }
+    else:
+        ml_insights = None
+
     return {
         "scan_id": scan_id,
         "scan_name": scan.scan_name,
@@ -728,6 +772,7 @@ async def get_scan_report(
             "endpoints_tested": endpoints_tested,
             "failure_rate": failure_rate
         },
+        "ml_insights": ml_insights,
         "failures_by_type": failures_by_type,
         "failures": failures,
         "curl_commands": curl_commands

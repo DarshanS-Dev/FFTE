@@ -5,3 +5,8 @@ pydantic
 sqlmodel
 psycopg2-binary
 python-dotenv
+# ML predictor dependencies
+joblib
+xgboost
+numpy
+scikit-learn
