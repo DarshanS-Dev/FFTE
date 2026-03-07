@@ -25,7 +25,7 @@ from reporting.report import ExecutionLogEntry, generate_report
 from failure_detection.rules import classify
 
 from sqlmodel import Session
-from db.database import engine
+from db.config import engine
 from db.models import TestExecution, Scan
 
 logger = logging.getLogger("ffte.core.runner")
@@ -108,7 +108,9 @@ def _dry_run_report(
 
         # Body-param rows
         if endpoint.request_body_schema:
-            edge_cases = generate_edge_cases_flat(endpoint.request_body_schema)
+            edge_cases = generate_edge_cases_flat(
+                endpoint.request_body_schema, root_spec=raw_spec
+            )
             for field, values in edge_cases.items():
                 for v in values[:max_cases_per_field]:
                     try:
@@ -162,7 +164,7 @@ def run(
     spec_url: str,
     base_url: str | None = None,
     *,
-    timeout: float = 10.0,
+    timeout: float = 8.0,
     limit_endpoints: int | None = None,
     scan_id: Optional[str] = None,
     fuzzing_intensity: int = 5,
@@ -189,7 +191,7 @@ def run(
     label = intensity_label.get(fuzzing_intensity, "Medium")
     print(f"🎚️  Fuzzing intensity: {fuzzing_intensity}/10 ({label} - {max_cases_per_field} cases per field)")
 
-    endpoints, extracted_base_url = fetch_and_parse(spec_url)
+    endpoints, extracted_base_url, raw_spec = fetch_and_parse(spec_url)
 
     if base_url is None and extracted_base_url:
         base_url = extracted_base_url
@@ -311,7 +313,9 @@ def run(
 
             # --- BODY FUZZING ---
             if endpoint.request_body_schema:
-                edge_cases = generate_edge_cases_flat(endpoint.request_body_schema)
+                edge_cases = generate_edge_cases_flat(
+                    endpoint.request_body_schema, root_spec=raw_spec
+                )
 
                 for field, values in edge_cases.items():
                     for v in values[:max_cases_per_field]:  # dynamic limit from intensity
@@ -335,7 +339,7 @@ def run(
                         if db_session is not None and db_scan_uuid is not None:
                             try:
                                 classification = classify(result)
-                                failure_type = classification.failure_type.value
+                                failure_type = classification.failure_type.value if caused_failure else None
                                 caused_failure = classification.is_failure
                                 response_time_ms = (
                                     result.latency_seconds * 1000.0

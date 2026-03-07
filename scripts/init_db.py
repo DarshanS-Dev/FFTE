@@ -13,7 +13,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
 
-from db.database import DATABASE_URL, engine, init_db  # noqa: E402
+from db.config import DATABASE_URL, engine, init_db  # noqa: E402
 from db.models import Scan, TestExecution  # noqa: E402
 
 

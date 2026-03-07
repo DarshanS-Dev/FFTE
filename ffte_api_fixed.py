@@ -16,9 +16,8 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 from sqlalchemy import func, case
 
-from db.config import create_db_and_tables, get_session
+from db.config import create_db_and_tables, engine, get_session
 from db.models import Scan, TestExecution
-from db.database import engine
 
 logger = logging.getLogger("ffte.api")
 
@@ -83,11 +82,15 @@ class ScanManager:
     
     def create_scan(self, request: ScanRequest) -> str:
         """Create a new scan and return its ID."""
+        url = request.spec_url or request.target_url
+        if not url:
+            raise ValueError("spec_url or target_url is required")
+            
         scan_id = str(uuid.uuid4())
         
         scan_data = {
             "scan_id": scan_id,
-            "request": request.model_dump(),
+            "request": {**request.model_dump(), "target_url": url, "spec_url": url},
             "status": "pending",
             "progress": 0.0,
             "start_time": datetime.now(),
@@ -205,16 +208,15 @@ class FFTEScanner:
             
             # ===== FIX: Calculate actual total tests executed =====
             from surface_discovery.openapi_parser import fetch_and_parse
-            from input_generation.edge_cases import generate_edge_cases_flat
+            from input_generation.edge_cases import generate_edge_cases_flat, QUERY_PARAM_EDGE_CASES
             
             total_tests_executed = 0
             endpoint_count = 0
             
             try:
-                endpoints, _ = fetch_and_parse(spec_url)
+                endpoints, _, raw_spec = fetch_and_parse(spec_url)
                 endpoint_count = len(endpoints)
-                
-                # Map fuzzing_intensity to max_cases_per_field (same logic as core.runner)
+            
                 if fuzzing_intensity <= 3:
                     effective_max_cases = 3
                 elif fuzzing_intensity <= 5:
@@ -225,22 +227,31 @@ class FFTEScanner:
                     effective_max_cases = 50
                 else:
                     effective_max_cases = 100
-                
-                # Calculate actual tests executed (same logic as core.runner)
+            
                 for endpoint in endpoints:
+                    query_param_list = [
+                        p for p in endpoint.parameters if p.location == "query"
+                    ]
+            
+                    if query_param_list:
+                        for qp in query_param_list:
+                            total_tests_executed += min(
+                                len(QUERY_PARAM_EDGE_CASES), effective_max_cases
+                            )
+            
                     if endpoint.request_body_schema:
-                        edge_cases = generate_edge_cases_flat(endpoint.request_body_schema)
+                        edge_cases = generate_edge_cases_flat(
+                            endpoint.request_body_schema, root_spec=raw_spec
+                        )
                         for field, values in edge_cases.items():
                             total_tests_executed += min(len(values), effective_max_cases)
-                    else:
-                        # Endpoints without request body get 1 test
+                    elif not query_param_list:
                         total_tests_executed += 1
                 
                 print(f"📊 Tests executed: {total_tests_executed}, Failures: {total_failures}")
                 
             except Exception as e:
-                print(f"⚠️  Could not calculate exact test count: {e}")
-                # Fallback: reasonable estimate
+                logger.warning("Could not calculate exact test count: %s", e)
                 total_tests_executed = max(total_failures * 3, total_failures + 20)
             
             # Update with results
@@ -285,14 +296,13 @@ class FFTEScanner:
             print(f"✅ Scan completed: {total_failures} failures found out of {total_tests_executed} tests")
             
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            logger.exception("Scan %s failed with an unhandled exception: %s", scan_id, e)
 
             # Update in-memory scan state
             self.scan_manager.update_scan(
                 scan_id,
                 status="failed",
-                error=str(e),
+                error="An internal error occurred. Check server logs for details.",
                 progress=100.0,
                 end_time=datetime.now()
             )
@@ -361,26 +371,24 @@ async def start_scan(
     if not url:
         raise HTTPException(status_code=422, detail="spec_url or target_url required")
     
-    # Store with unified naming
-    req_dict = request.model_dump()
-    req_dict["target_url"] = url 
-    
-    scan_id = str(uuid.uuid4())
+    scan_id = scan_manager.create_scan(request)
     
     # Get endpoint info for UI preview (non-blocking)
     try:
         from surface_discovery.openapi_parser import fetch_and_parse
-        endpoints, _ = fetch_and_parse(url)
+        endpoints, _, _ = fetch_and_parse(url)
         endpoint_previews = [{"method": e.method.upper(), "path": e.path} for e in endpoints[:10]]
     except:
         endpoint_previews = []
+        
+    scan_manager.update_scan(scan_id, endpoints=endpoint_previews)
     
     # Persist scan in database (source of truth) when available
     if session is not None:
         try:
             db_scan = Scan(
                 id=uuid.UUID(scan_id),
-                scan_name=req_dict.get("scan_name") or "UNNAMED_ALPHA",
+                scan_name=request.scan_name or "UNNAMED_ALPHA",
                 target_url=url,
                 status="pending",
                 start_time=datetime.now(),
@@ -395,23 +403,6 @@ async def start_scan(
             except Exception:
                 # Ignore rollback errors
                 pass
-
-    scan_data = {
-        "scan_id": scan_id,
-        "request": req_dict,
-        "status": "pending",
-        "progress": 0.0,
-        "start_time": datetime.now(),
-        "end_time": None,
-        "tests_executed": 0,
-        "failures_found": 0,
-        "endpoints": endpoint_previews,
-        "results": None,
-        "error": None,
-    }
-    
-    with scan_manager.lock:
-        scan_manager.scans[scan_id] = scan_data
     
     # Run scan in background
     background_tasks.add_task(scanner.run_scan, scan_id)
@@ -753,7 +744,7 @@ async def health_check():
         "service": "ffte-api-fixed-v3",
         "version": "3.0.0",
         "timestamp": datetime.now().isoformat(),
-        "scans_count": len(scan_manager.scans)
+        "scans_count": len(scan_manager.list_scans())
     }
 
 # ================ Run the API ================

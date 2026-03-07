@@ -102,7 +102,7 @@ def _parse_request_body(req_body: Any, spec: Dict[str, Any]) -> Optional[Dict[st
     return None
 
 
-def fetch_and_parse(openapi_url: str) -> tuple[List[Endpoint], Optional[str]]:
+def fetch_and_parse(openapi_url: str) -> tuple[List[Endpoint], Optional[str], dict]:
     """Fetch and parse OpenAPI spec from URL with robust error handling.
 
     Returns:
@@ -161,6 +161,14 @@ def fetch_and_parse(openapi_url: str) -> tuple[List[Endpoint], Optional[str]]:
             # Parse request body
             body_schema = _parse_request_body(operation.get("requestBody"), spec)
             
+            if body_schema is None:
+                for p in operation.get("parameters", []):
+                    if isinstance(p, dict) and p.get("in") == "body":
+                        schema = p.get("schema", {})
+                        if isinstance(schema, dict):
+                            body_schema = resolve_refs(schema, spec)
+                        break
+            
             endpoints.append(Endpoint(
                 path=path,
                 method=method.lower(),
@@ -173,7 +181,7 @@ def fetch_and_parse(openapi_url: str) -> tuple[List[Endpoint], Optional[str]]:
     if not endpoints:
         raise ValueError("No valid endpoints found in OpenAPI spec")
     
-    return endpoints, base_url
+    return endpoints, base_url, spec
 
 
 def parse_from_file(file_path: str) -> List[Endpoint]:
@@ -215,6 +223,14 @@ def parse_from_file(file_path: str) -> List[Endpoint]:
             
             params = _parse_parameters(operation.get("parameters", []), spec)
             body_schema = _parse_request_body(operation.get("requestBody"), spec)
+            
+            if body_schema is None:
+                for p in operation.get("parameters", []):
+                    if isinstance(p, dict) and p.get("in") == "body":
+                        schema = p.get("schema", {})
+                        if isinstance(schema, dict):
+                            body_schema = resolve_refs(schema, spec)
+                        break
             
             endpoints.append(Endpoint(
                 path=path,

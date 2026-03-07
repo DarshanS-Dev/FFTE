@@ -311,12 +311,24 @@ async function updateScanStatus() {
             previousEndpointCount = status.endpoints.length;
         }
 
-        endpointsListEl.innerHTML = status.endpoints.map(e => `
-            <div class="endpoint-item">
-                <span class="method method-${e.method}">${e.method}</span>
-                <span class="path">${e.path}</span>
-            </div>
-        `).join('');
+        const fragment = document.createDocumentFragment();
+        for (const e of status.endpoints) {
+            const item = document.createElement('div');
+            item.classList.add('endpoint-item');
+
+            const methodSpan = document.createElement('span');
+            methodSpan.classList.add('method', `method-${e.method}`);
+            methodSpan.textContent = e.method;
+
+            const pathSpan = document.createElement('span');
+            pathSpan.classList.add('path');
+            pathSpan.textContent = e.path;
+
+            item.appendChild(methodSpan);
+            item.appendChild(pathSpan);
+            fragment.appendChild(item);
+        }
+        endpointsListEl.replaceChildren(fragment);
     }
 
     if (status.status === 'completed') {
@@ -348,21 +360,51 @@ async function loadResults() {
 
     const failuresEl = document.getElementById('failures_list');
     if (failuresEl) {
-        failuresEl.innerHTML = results.failures.map(f => `
-            <div class="glass-card failure-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <span class="method method-${f.method}">${f.method}</span>
-                    <span class="status status-failed">${f.type}</span>
-                </div>
-                <div style="font-family: monospace; font-size: 0.9rem; color: #fff; margin-bottom: 1rem;">
-                    ${f.url}
-                </div>
-                <div style="background: rgba(0,0,0,0.5); padding: 10px; border-radius: 4px; font-size: 0.8rem; border: 1px solid var(--border);">
-                    <div style="color: var(--text-muted); margin-bottom: 5px;">Payload:</div>
-                    <code>${f.payload}</code>
-                </div>
-            </div>
-        `).join('');
+        const fragment = document.createDocumentFragment();
+        for (const f of results.failures) {
+            const card = document.createElement('div');
+            card.classList.add('glass-card', 'failure-card');
+
+            // Header row: method + type
+            const header = document.createElement('div');
+            header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;';
+
+            const methodSpan = document.createElement('span');
+            methodSpan.classList.add('method', `method-${f.method}`);
+            methodSpan.textContent = f.method;
+
+            const typeSpan = document.createElement('span');
+            typeSpan.classList.add('status', 'status-failed');
+            typeSpan.textContent = f.type;
+
+            header.appendChild(methodSpan);
+            header.appendChild(typeSpan);
+            card.appendChild(header);
+
+            // URL row
+            const urlDiv = document.createElement('div');
+            urlDiv.style.cssText = 'font-family: monospace; font-size: 0.9rem; color: #fff; margin-bottom: 1rem;';
+            urlDiv.textContent = f.url;
+            card.appendChild(urlDiv);
+
+            // Payload row
+            const payloadWrapper = document.createElement('div');
+            payloadWrapper.style.cssText = 'background: rgba(0,0,0,0.5); padding: 10px; border-radius: 4px; font-size: 0.8rem; border: 1px solid var(--border);';
+
+            const payloadLabel = document.createElement('div');
+            payloadLabel.style.cssText = 'color: var(--text-muted); margin-bottom: 5px;';
+            payloadLabel.textContent = 'Payload:';
+
+            const payloadCode = document.createElement('code');
+            payloadCode.textContent = f.payload;
+
+            payloadWrapper.appendChild(payloadLabel);
+            payloadWrapper.appendChild(payloadCode);
+            card.appendChild(payloadWrapper);
+
+            fragment.appendChild(card);
+        }
+        failuresEl.replaceChildren(fragment);
 
         if (results.failures.length > 0) {
             setTimeout(playErrorSound, 500); // Play after success sound

@@ -13,6 +13,40 @@ from typing import Any, Callable
 # --- Comprehensive edge-case generators based on security research ---
 
 
+def resolve_refs(schema: dict[str, Any], root_spec: dict) -> dict[str, Any]:
+    """Resolve ``$ref`` JSON Pointers in *schema* against *root_spec*.
+
+    If *schema* contains no ``$ref`` key it is returned unchanged.
+    Otherwise the ``$ref`` value (e.g. ``"#/components/schemas/Foo"``) is
+    parsed into path parts and walked through *root_spec* to locate the
+    referenced sub-schema.  The result is then resolved recursively so
+    that chains of ``$ref`` are handled.
+
+    If resolution fails for any reason the original *schema* is returned
+    unchanged so the fuzzer never crashes.
+    """
+    try:
+        if not isinstance(schema, dict) or "$ref" not in schema:
+            return schema
+
+        ref: str = schema["$ref"]
+        if not ref.startswith("#/"):
+            return schema
+
+        parts = ref[2:].split("/")  # e.g. ["components", "schemas", "Foo"]
+
+        resolved: Any = root_spec
+        for part in parts:
+            resolved = resolved[part]
+
+        if not isinstance(resolved, dict):
+            return schema
+
+        return resolve_refs(resolved, root_spec)
+    except Exception:
+        return schema
+
+
 def get_integer_edge_cases():
     """Integer edge cases covering boundaries, type confusion, and special values."""
     return {
@@ -519,7 +553,10 @@ def _get_candidates_for_type(
     )
 
 
-def generate_edge_cases(schema: dict[str, Any]) -> dict[str, list[Any]]:
+def generate_edge_cases(
+    schema: dict[str, Any],
+    root_spec: dict | None = None,
+) -> dict[str, list[Any]]:
     """
     Generate edge-case candidate values per field from a JSON Schema.
 
@@ -528,17 +565,19 @@ def generate_edge_cases(schema: dict[str, Any]) -> dict[str, list[Any]]:
 
     Args:
         schema: JSON Schema (e.g. from OpenAPI requestBody.content.*.schema).
+        root_spec: Full OpenAPI spec dict for resolving $ref pointers.
 
     Returns:
         Dict mapping each field path (e.g. "items.id") to a list of candidate values.
     """
+    if root_spec is not None:
+        schema = resolve_refs(schema, root_spec)
     result: dict[str, list[Any]] = {}
 
     def _walk(s: dict[str, Any], path: str = "") -> None:
+        if root_spec is not None and "$ref" in s:
+            s = resolve_refs(s, root_spec)
         schema_type = s.get("type")
-        if "$ref" in s:
-            # Caller should resolve refs before calling; skip for now
-            return
 
         if schema_type == "object":
             obj_path = path or "value"
@@ -569,14 +608,19 @@ def generate_edge_cases(schema: dict[str, Any]) -> dict[str, list[Any]]:
     return result
 
 
-def generate_edge_cases_flat(schema: dict[str, Any]) -> dict[str, list[Any]]:
+def generate_edge_cases_flat(
+    schema: dict[str, Any],
+    root_spec: dict | None = None,
+) -> dict[str, list[Any]]:
     """
     Generate edge-case values per leaf field only (no nested paths).
 
     Use when you need a flat mapping of top-level or leaf field names
     to their candidate values.
     """
-    all_cases = generate_edge_cases(schema)
+    if root_spec is not None:
+        schema = resolve_refs(schema, root_spec)
+    all_cases = generate_edge_cases(schema, root_spec=root_spec)
     # Keep leaf paths: those whose path is not a prefix of another
     paths = sorted(all_cases.keys())
     leaf_paths = [

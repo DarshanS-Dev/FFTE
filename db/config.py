@@ -5,6 +5,7 @@ import os
 from collections.abc import Generator
 from typing import Optional
 
+from sqlalchemy import text
 from sqlmodel import SQLModel, Session, create_engine
 
 from db import models  # ensure models are imported so metadata is populated
@@ -52,4 +53,26 @@ def get_session() -> Generator[Optional[Session], None, None]:
         logger.error("Failed to open database session: %s", exc)
         # Yield None so API handlers can continue without DB.
         yield None
+
+
+def init_db() -> None:
+    """
+    Initialize database schema and create performance indexes.
+
+    Calls :func:`create_db_and_tables` then idempotently adds indexes
+    that speed up history queries on existing databases.
+    """
+    create_db_and_tables()
+
+    index_queries = [
+        "CREATE INDEX IF NOT EXISTS idx_scan_start_time ON scans (start_time);",
+        "CREATE INDEX IF NOT EXISTS idx_test_scan_id ON test_executions (scan_id);",
+        "CREATE INDEX IF NOT EXISTS idx_test_failure ON test_executions (caused_failure);",
+    ]
+
+    with Session(engine) as session:
+        for query in index_queries:
+            session.exec(text(query))
+        session.commit()
+
 
