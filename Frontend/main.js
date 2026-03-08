@@ -299,9 +299,28 @@ async function updateScanStatus() {
     const progressEl = document.getElementById('progress_bar');
     const statusTextEl = document.getElementById('status_text');
     const endpointsListEl = document.getElementById('endpoints_list');
+    const startTimeEl = document.getElementById('start_time_display');
+    const elapsedTimeEl = document.getElementById('elapsed_time_display');
+    const remainingTimeEl = document.getElementById('remaining_time_display');
 
     if (progressEl) progressEl.style.width = `${status.progress}%`;
     if (statusTextEl) statusTextEl.innerText = status.status.toUpperCase();
+
+    if (status.start_time) {
+        const startTime = new Date(status.start_time);
+        if (startTimeEl) startTimeEl.innerText = startTime.toLocaleTimeString();
+
+        const now = status.end_time ? new Date(status.end_time) : new Date();
+        const elapsed = Math.max(0, Math.floor((now - startTime) / 1000));
+        if (elapsedTimeEl) elapsedTimeEl.innerText = `${elapsed}s`;
+
+        if (status.status === 'running' && status.progress > 5 && remainingTimeEl) {
+            const remaining = Math.round(((100 - status.progress) / status.progress) * elapsed);
+            remainingTimeEl.innerText = `~${remaining}s`;
+        } else if (status.status === 'completed' && remainingTimeEl) {
+            remainingTimeEl.innerText = 'FINISHED';
+        }
+    }
 
     if (endpointsListEl && status.endpoints) {
         if (status.endpoints.length > previousEndpointCount) {

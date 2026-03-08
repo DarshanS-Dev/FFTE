@@ -640,7 +640,12 @@
 
   <script>
     const navLinks = document.getElementById('nav-links');
-    const isLoggedIn = !!localStorage.getItem('ffte_user');
+    const isCookieSet = document.cookie.includes('ffte_auth_sync=1');
+    if (!isCookieSet) {
+      localStorage.removeItem('ffte_user');
+    }
+    const isLoggedIn = !!localStorage.getItem('ffte_user') && isCookieSet;
+
     navLinks.innerHTML = `
           <a href="http://localhost:5173/">00 HOME</a>
           <a href="http://localhost:3000/command-center.html">01 COMMAND CENTER</a>

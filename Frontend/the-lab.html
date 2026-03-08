@@ -25,7 +25,12 @@
     </nav>
     <script>
         const navLinks = document.getElementById('nav-links');
-        const isLoggedIn = !!localStorage.getItem('ffte_user');
+        const isCookieSet = document.cookie.includes('ffte_auth_sync=1');
+        if (!isCookieSet) {
+            localStorage.removeItem('ffte_user');
+        }
+        const isLoggedIn = !!localStorage.getItem('ffte_user') && isCookieSet;
+
         navLinks.innerHTML = `
             <a href="http://localhost:5173/">00 HOME</a>
             <a href="http://localhost:3000/command-center.html">01 COMMAND CENTER</a>
@@ -39,7 +44,7 @@
             `}
         `;
     </script>
-    </nav>
+
 
     <div class="high-noir-container">
         <aside class="left-panel">
@@ -56,10 +61,28 @@
                     </div>
                 </div>
 
+                <div style="color: var(--text-muted); font-size: 0.7rem; line-height: 1.8; margin-bottom: 2rem;">
+                    <label class="section-label">PROCESS_TIMING</label>
+                    <div
+                        style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--charcoal); padding-bottom: 5px; margin-bottom: 5px;">
+                        <span>START_TIME</span>
+                        <span id="start_time_display" style="color: var(--white); font-weight: bold;">--:--:--</span>
+                    </div>
+                    <div
+                        style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--charcoal); padding-bottom: 5px; margin-bottom: 5px;">
+                        <span>ELAPSED</span>
+                        <span id="elapsed_time_display" style="color: var(--signal-red); font-weight: bold;">0s</span>
+                    </div>
+                    <div
+                        style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--charcoal); padding-bottom: 5px; margin-bottom: 5px;">
+                        <span>ESTIMATED_REMAINING</span>
+                        <span id="remaining_time_display" style="color: var(--text-muted);">CALCULATING...</span>
+                    </div>
+                </div>
+
                 <div style="color: var(--text-muted); font-size: 0.7rem; line-height: 1.8;">
                     [SEQUENCE_DATA]<br>
                     MODE: FULL_FUZZ<br>
-                    INJECTION: ACTIVE<br>
                     LOGGING: ENCRYPTED
                 </div>
             </div>
