@@ -485,29 +485,17 @@ async function loadResults() {
         const fbt = results.failures_by_type || {};
         const ml = results.ml_insights;
 
-        let report = `SCAN_ID:  ${results.scan_id || scanId}\n`;
-        report += `NAME:     ${results.scan_name || '—'}\n`;
-        report += `TARGET:   ${results.target_url || '—'}\n`;
-        report += `STATUS:   ${(results.status || '').toUpperCase()}\n`;
-        report += `DURATION: ${results.duration_seconds ?? '?'}s\n`;
-        report += `\n── STATISTICS ──────────────────────\n`;
-        report += `Total Tests:    ${s.total_tests ?? 0}\n`;
-        report += `Total Failures: ${s.total_failures ?? 0}\n`;
-        report += `Failure Rate:   ${s.failure_rate ?? 0}%\n`;
-        report += `Endpoints:      ${s.endpoints_tested ?? 0}\n`;
+        let report = `REPRODUCTION_COMMANDS_LOG\n`;
+        report += `SCAN_ID: ${results.scan_id || scanId}\n`;
+        report += `TIMESTAMP: ${new Date().toLocaleString()}\n`;
+        report += `────────────────────────────────────\n\n`;
 
-        if (Object.keys(fbt).length > 0) {
-            report += `\n── FAILURES BY TYPE ────────────────\n`;
-            for (const [type, count] of Object.entries(fbt)) {
-                report += `${type.padEnd(22)} ${count}\n`;
-            }
-        }
-
-        if (ml) {
-            report += `\n── ML INSIGHTS ─────────────────────\n`;
-            report += `Avg Failure Probability: ${ml.avg_failure_probability}\n`;
-            report += `High Risk Fields:        ${ml.high_risk_count}\n`;
-            report += `Low Risk Fields:         ${ml.low_risk_count}\n`;
+        if (results.curl_commands && results.curl_commands.length > 0) {
+            results.curl_commands.forEach((cmd, idx) => {
+                report += `[FAIL_${(idx + 1).toString().padStart(2, '0')}]\n${cmd}\n\n`;
+            });
+        } else {
+            report += `✅ NO FAILURES DETECTED. NO COMMANDS TO GENERATE.\n`;
         }
 
         reportEl.innerText = report;

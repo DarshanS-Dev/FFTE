@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.25" />
   <title>FFTE // DIAGNOSTIC STREAM</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link
@@ -35,6 +35,7 @@
     }
 
     body {
+      zoom: 1.25;
       background-color: var(--bg);
       background-image:
         linear-gradient(var(--grid) 1px, transparent 1px),
@@ -855,6 +856,43 @@
       color: #FFFFFF;
       background: rgba(255, 255, 255, 0.05);
     }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 20px;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal-content {
+      width: 100%;
+      max-width: 800px;
+      background: #000;
+      border: 1px solid var(--red);
+      box-shadow: 0 0 100px rgba(255, 0, 0, 0.15);
+    }
+
+    .modal-close {
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+    }
+
+    .modal-close:hover {
+      color: var(--red);
+    }
   </style>
 </head>
 
@@ -1057,8 +1095,24 @@
     </div>
   </div>
 
-  <!-- Toast -->
-  <div class="toast" id="toast"></div>
+  <!-- Report Modal -->
+  <div id="reportModal" class="modal-overlay" onclick="if(event.target === this) closeModal()">
+    <div class="modal-content">
+      <div class="terminal-header" style="border-bottom: 0;">
+        <div class="mac-dots">
+          <div class="dot red" onclick="closeModal()"></div>
+          <div class="dot yellow"></div>
+          <div class="dot green"></div>
+        </div>
+        <div class="terminal-title" id="modalTitle">Analysis_Report</div>
+        <div class="modal-close" onclick="closeModal()">[CLOSE]</div>
+      </div>
+      <div class="terminal-body" style="padding: 30px; border-top: 1px solid #222; max-height: 70vh; overflow-y: auto;">
+        <pre id="modalReport"
+          style="white-space: pre-wrap; word-break: break-all; font-family: var(--mono); font-size: 11px; line-height: 1.6; color: rgba(255,255,255,0.85);"></pre>
+      </div>
+    </div>
+  </div>
 
   <script>
     // ── Storage Helpers ──────────────────────────────────────────────
@@ -1159,7 +1213,7 @@
         const dateLabel = scanTime.toLocaleDateString([], { month: 'short', day: 'numeric' });
         const isActive = i === 0;
         return `
-    <div class="scan-row" style="animation-delay:${i * 0.05}s" onclick="deleteScanConfirm('${scan.scan_id}')">
+    <div class="scan-row" style="animation-delay:${i * 0.05}s" onclick="showScanReport('${scan.scan_id}')">
       <div class="scan-info">
         <div class="scan-name">
           ${scan.scan_name}
@@ -1179,6 +1233,9 @@
         <div class="stat-col">
           <div class="stat-val" style="color:var(--red)">${passRate}%</div>
           <div class="stat-key">Rate</div>
+        </div>
+        <div class="stat-col" style="border:none; padding-left:20px;">
+           <button onclick="event.stopPropagation(); deleteScanConfirm('${scan.scan_id}')" style="background:none; border:none; color:#333; cursor:pointer; font-size:10px; font-weight:700; transition:color 0.2s;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='#333'">[PURGE]</button>
         </div>
       </div>
     </div>`;
@@ -1234,6 +1291,63 @@
     }
 
     // ── Add/Delete Scan Actions ────────────────────────────────────────
+    async function showScanReport(id) {
+      const modal = document.getElementById('reportModal');
+      const reportPre = document.getElementById('modalReport');
+      document.getElementById('modalTitle').textContent = `RETRIEVING_REPORT_${id.substring(0, 8)}...`;
+      reportPre.textContent = "Connecting to orbital database...\nFetching metadata clusters...\nDecrypting analysis layers...";
+      modal.classList.add('open');
+
+      try {
+        const res = await fetch(`${API_BASE}/api/scan/${id}/report`);
+        if (res.ok) {
+          const results = await res.json();
+          document.getElementById('modalTitle').textContent = `ANALYSIS_REPORT // ${results.scan_name || 'UNNAMED_SEQ'}`;
+
+          let report = `REPORT_ID:  ${results.scan_id}\n`;
+          report += `TARGET:     ${results.target_url}\n`;
+          report += `STATUS:     ${results.status.toUpperCase()}\n`;
+          report += `DURATION:   ${results.duration_seconds}s\n`;
+          report += `\n── STATISTICS ──────────────────────\n`;
+          report += `Total Tests:    ${results.statistics.total_tests}\n`;
+          report += `Total Failures: ${results.statistics.total_failures}\n`;
+          report += `Failure Rate:   ${results.statistics.failure_rate}%\n`;
+          report += `Endpoints:      ${results.statistics.endpoints_tested}\n`;
+
+          if (results.ml_insights) {
+            report += `\n── ML INSIGHTS ─────────────────────\n`;
+            report += `Avg Probability: ${results.ml_insights.avg_failure_probability}\n`;
+            report += `High Risk:       ${results.ml_insights.high_risk_count}\n`;
+            report += `Low Risk:        ${results.ml_insights.low_risk_count}\n`;
+          }
+
+          if (results.failures && results.failures.length > 0) {
+            report += `\n── CRITICAL_FAILURES ───────────────\n`;
+            results.failures.forEach((f, idx) => {
+              report += `[FAIL_${(idx + 1).toString().padStart(2, '0')}] ${f.http_method} ${f.endpoint}\n`;
+              report += `       Type: ${f.failure_type}\n`;
+              if (f.field_name) report += `       Field: ${f.field_name} (${f.edge_case_type})\n`;
+              if (f.curl_command) report += `       Cmd: ${f.curl_command}\n`;
+              report += `\n`;
+            });
+          } else {
+            report += `\n✅ NO FAILURES DETECTED IN THIS CYCLE.\n`;
+          }
+
+          reportPre.textContent = report;
+        } else {
+          reportPre.textContent = "ERROR: FAILED TO RETRIEVE ARCHIVED REPORT.\nSTATUS_CODE: " + res.status;
+        }
+      } catch (err) {
+        console.error(err);
+        reportPre.textContent = "CRITICAL_ERROR: SEQUENCE_INTERRUPTED_BY_NETWORK.\nCHECK_CONSOLE_LOGS.";
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('reportModal').classList.remove('open');
+    }
+
     async function deleteScanConfirm(id) {
       if (!confirm('REMOVE THIS SCAN FROM ARCHIVE?')) return;
       try {

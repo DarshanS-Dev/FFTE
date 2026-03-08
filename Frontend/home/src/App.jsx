@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { motion, useScroll, useSpring, useTransform, useInView } from 'framer-motion';
+import React, { useEffect, useRef, useState } from 'react';
+import { motion, useScroll, useSpring, useTransform, useInView, AnimatePresence } from 'framer-motion';
 import { Plane, Bird, Zap, Target, Terminal as TerminalIcon, Copy, ChevronRight, Activity, ShieldAlert } from 'lucide-react';
 
 // --- Custom Graphics (Created based on Process) ---
@@ -309,114 +309,158 @@ const MarqueeTicker = () => {
 
 // --- Showcase Section (Device & UI) ---
 
-const ShowcaseSection = () => {
-    const nodes = [
-        { height: '60%', x: '15%' },
-        { height: '40%', x: '30%' },
-        { height: '75%', x: '50%' },
-        { height: '35%', x: '65%' },
-        { height: '55%', x: '85%' },
+const ShowcaseCarousel = () => {
+    const [index, setIndex] = useState(0);
+    const data = [
+        {
+            title: "Discover lethal API",
+            desc: "vulnerabilities",
+            color: "#FF0000",
+            img1: "assets/workflow.png",
+            img2: "assets/hero_page/ezgif-frame-003.jpg"
+        },
+        {
+            title: "Simulate controlled",
+            desc: "digital chaos",
+            color: "#FF5533",
+            img1: "assets/test.jpeg",
+            img2: "assets/hero_page/ezgif-frame-100.jpg"
+        },
+        {
+            title: "Reproduce crashes",
+            desc: "with one click",
+            color: "#6040FF",
+            img1: "assets/hero_page/ezgif-frame-050.jpg",
+            img2: "assets/hero_page/ezgif-frame-150.jpg"
+        }
     ];
 
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setIndex((prev) => (prev + 1) % data.length);
+        }, 5000);
+        return () => clearInterval(timer);
+    }, [data.length]);
+
     return (
-        <section className="py-12 px-4 md:px-12 bg-background relative z-10">
-            {/* Rounded Background Block */}
-            <div className="relative w-full max-w-6xl mx-auto bg-[#F2F6F4] rounded-[50px] md:rounded-[80px] py-16 md:py-24 px-6 overflow-hidden border border-black/5">
-
-                {/* Device Frame */}
-                <motion.div
-                    initial={{ y: 50, opacity: 0 }}
-                    whileInView={{ y: 0, opacity: 1 }}
-                    transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-                    className="relative max-w-5xl mx-auto"
-                >
-                    {/* Outer Shadow */}
-                    <div className="absolute -inset-10 bg-black/5 blur-[100px] rounded-full pointer-events-none" />
-
-                    {/* Black Bezel */}
-                    <div className="relative bg-black p-4 md:p-7 rounded-[40px] md:rounded-[70px] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] ring-1 ring-white/10">
-                        {/* Inner Screen */}
-                        <div className="relative aspect-[16/10] bg-zinc-900 rounded-[30px] md:rounded-[50px] overflow-hidden">
-                            {/* Full-bleed Landscape Image */}
-                            <img
-                                src="assets/test.jpeg"
-                                alt="Landscape Visualization"
-                                className="absolute inset-0 w-full h-full object-cover"
-                            />
-
-                            {/* Dark Overlay for UI legibility */}
-                            <div className="absolute inset-0 bg-black/20" />
-
-                            {/* UI Overlays */}
-
-                            {/* Top Left: Status */}
-                            <div className="absolute top-10 left-10 text-white z-30">
-                                <div className="text-[10px] md:text-xs font-mono opacity-50 mb-2 uppercase tracking-widest">System / Core / Metrics</div>
-                                <div className="flex items-start gap-4">
-                                    <span className="text-5xl md:text-7xl font-black leading-none tracking-tighter">78%</span>
-                                    <div className="max-w-[100px] leading-tight mt-1">
-                                        <span className="text-[10px] md:text-xs font-mono font-bold uppercase opacity-90">Efficiency Improvements</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Top Right: Pill */}
-                            <div className="absolute top-10 right-10 z-30">
-                                <div className="bg-white/10 backdrop-blur-md border border-white/20 px-5 py-2 rounded-full text-white font-mono text-[10px] md:text-xs flex items-center gap-3">
-                                    All Regions (33)
-                                    <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                                </div>
-                            </div>
-
-                            {/* Upper Middle: Timeline */}
-                            <div className="absolute top-[35%] left-1/2 -translate-x-1/2 w-[70%] z-30">
-                                <div className="relative h-[2px] bg-white/20 rounded-full">
-                                    <div className="absolute inset-0 flex justify-between -top-8 text-[10px] font-mono text-white/50 tracking-widest">
-                                        <span>2021</span>
-                                        <span>2022</span>
-                                        <span>2023</span>
-                                        <span>2024</span>
-                                    </div>
-                                    {/* Tick marks */}
-                                    <div className="absolute inset-0 flex justify-between px-0">
-                                        {[...Array(4)].map((_, i) => (
-                                            <div key={i} className="w-[2px] h-3 bg-white/30 -translate-y-[5.5px]" />
-                                        ))}
-                                    </div>
-                                    <motion.div
-                                        initial={{ width: 0 }}
-                                        whileInView={{ width: '85%' }}
-                                        transition={{ duration: 2, delay: 0.5 }}
-                                        className="absolute top-0 left-0 h-full bg-white shadow-[0_0_15px_white]"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Lower Area: Vertical Nodes */}
-                            <div className="absolute bottom-0 inset-x-0 h-1/2 z-30 px-12 md:px-24">
-                                <div className="relative w-full h-full">
-                                    {nodes.map((node, i) => (
-                                        <motion.div
-                                            key={i}
-                                            initial={{ height: 0, opacity: 0 }}
-                                            whileInView={{ height: node.height, opacity: 1 }}
-                                            transition={{ duration: 1, delay: 0.8 + (i * 0.1) }}
-                                            className="absolute bottom-16 flex flex-col items-center group"
-                                            style={{ left: node.x }}
-                                        >
-                                            <div className="w-2.5 h-2.5 bg-white rounded-sm shadow-[0_0_15px_white]" />
-                                            <div className="w-[1px] flex-grow bg-white/30" />
-                                            <div className="w-2.5 h-2.5 bg-white/40 rounded-sm" />
-                                        </motion.div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Subtle Reflection */}
-                            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-black/20 pointer-events-none" />
+        <section className="relative min-h-[70vh] flex items-center bg-background text-foreground py-24 overflow-hidden">
+            <div className="max-w-7xl mx-auto px-8 w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                {/* Left Side: Text and Indicators */}
+                <div className="flex flex-col gap-8 order-2 md:order-1">
+                    <div className="flex flex-col">
+                        <motion.h2
+                            key={`title-${index}`}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="text-5xl md:text-7xl font-black tracking-tighter text-white uppercase"
+                        >
+                            {data[index].title}
+                        </motion.h2>
+                        <div className="overflow-hidden">
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={`desc-${index}`}
+                                    initial={{ opacity: 0, y: 50 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -50 }}
+                                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                                    className="text-5xl md:text-7xl font-black italic tracking-tighter uppercase"
+                                    style={{ color: data[index].color }}
+                                >
+                                    {data[index].desc}
+                                </motion.div>
+                            </AnimatePresence>
                         </div>
                     </div>
-                </motion.div>
+
+                    {/* Dot Indicators */}
+                    <div className="flex gap-4">
+                        {data.map((_, i) => (
+                            <motion.div
+                                key={i}
+                                onClick={() => setIndex(i)}
+                                animate={{
+                                    scale: i === index ? 1.3 : 1,
+                                    backgroundColor: i === index ? data[i].color : "rgba(255,255,255,0.1)",
+                                    width: i === index ? 24 : 12
+                                }}
+                                className="h-3 rounded-full cursor-pointer transition-all duration-500"
+                            />
+                        ))}
+                    </div>
+
+                    <div className="flex gap-6 items-center mt-4">
+                        <motion.button
+                            whileHover={{ scale: 1.05, backgroundColor: "#FF0000" }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => window.location.href = 'http://localhost:3000/command-center.html'}
+                            className="px-10 py-5 bg-foreground text-background rounded-full font-black text-xl tracking-widest uppercase hover:text-white transition-all shadow-[0_0_30px_rgba(255,255,255,0.1)]"
+                        >
+                            Launch Engine
+                        </motion.button>
+                        <button
+                            className="text-lg font-bold border-b-2 border-white/10 hover:border-white transition-all text-white/60 hover:text-white"
+                            onClick={() => window.location.href = 'http://localhost:3000/auth.html'}
+                        >
+                            I already have an account
+                        </button>
+                    </div>
+                </div>
+
+                {/* Right Side: Floating Animated Cards */}
+                <div className="relative h-[500px] md:h-[700px] order-1 md:order-2 flex items-center justify-center">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={`container-${index}`}
+                            className="relative w-full h-full flex items-center justify-center"
+                        >
+                            {/* Larger Background Card */}
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.8, x: 100, rotate: 10 }}
+                                animate={{ opacity: 1, scale: 1, x: 0, rotate: 5 }}
+                                exit={{ opacity: 0, scale: 0.8, x: -100, rotate: -10 }}
+                                transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+                                className="absolute w-[80%] h-[75%] rounded-[60px] overflow-hidden shadow-[0_60px_100px_-20px_rgba(0,0,0,0.5)] border-[12px] border-white/5 z-0"
+                            >
+                                <img src={data[index].img1} className="w-full h-full object-cover transition-transform duration-[2000ms] hover:scale-110" alt="FFTE Visualization" />
+                                <div className="absolute top-10 left-10">
+                                    <div className="bg-background/40 backdrop-blur-xl p-6 rounded-[30px] border border-white/10 shadow-2xl">
+                                        <Activity className="text-white w-10 h-10" />
+                                    </div>
+                                </div>
+                            </motion.div>
+
+                            {/* Smaller Overlapping Foreground Card */}
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.5, y: 150, rotate: -20 }}
+                                animate={{ opacity: 1, scale: 1, y: 100, x: -80, rotate: -5 }}
+                                exit={{ opacity: 0, scale: 0.5, y: -150, rotate: 20 }}
+                                transition={{ duration: 0.9, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+                                className="absolute w-[65%] h-[55%] rounded-[50px] overflow-hidden shadow-[0_40px_80px_-15px_rgba(0,0,0,0.6)] border-[10px] border-white/10 z-10"
+                            >
+                                <img src={data[index].img2} className="w-full h-full object-cover brightness-75 transition-transform duration-[2000ms] hover:scale-110" alt="FFTE Analysis" />
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background via-background/20 to-transparent p-10">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                                        <div className="font-mono text-white text-sm font-black tracking-[0.2em] uppercase">
+                                            Lethal Signal // Live
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+
+                            {/* Floating Version Tag */}
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.5 }}
+                                className="absolute top-20 right-0 bg-white text-black px-6 py-3 rounded-full font-mono text-xs font-bold tracking-widest uppercase z-20 shadow-xl"
+                            >
+                                FFTE v1.0.0
+                            </motion.div>
+                        </motion.div>
+                    </AnimatePresence>
+                </div>
             </div>
         </section>
     );
@@ -614,7 +658,7 @@ export default function App() {
                             className="bg-foreground text-background font-mono px-8 py-4 flex items-center gap-4 text-xl font-bold group hover:cursor-pointer"
                         >
                             <span className="opacity-40">$</span>
-                            run python app.py
+                            start engine
                             <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                         </motion.button>
                     </motion.div>
@@ -633,8 +677,8 @@ export default function App() {
             {/* Marquee */}
             <MarqueeTicker />
 
-            {/* Showcase Section */}
-            <ShowcaseSection />
+            {/* Showcase Carousel */}
+            <ShowcaseCarousel />
 
             {/* Feature Section (Vertical Timeline) */}
             <section className="relative py-40 px-4 max-w-7xl mx-auto">
