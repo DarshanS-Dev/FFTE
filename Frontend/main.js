@@ -29,7 +29,7 @@ function playClickSound() {
 }
 
 function playHoverSound() {
-    if (audioCtx.state === 'suspended') return; // Don't resume on hover to avoid annoyance
+    if (audioCtx.state === 'suspended') return;
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
 
@@ -54,11 +54,9 @@ function startProcessingSound() {
     processingOscillator = audioCtx.createOscillator();
     processingGain = audioCtx.createGain();
 
-    // Low throbbing drone
     processingOscillator.type = 'sawtooth';
     processingOscillator.frequency.setValueAtTime(60, audioCtx.currentTime);
 
-    // Create LFO for pulsing effect
     lfoNode = audioCtx.createOscillator();
     lfoNode.type = 'sine';
     lfoNode.frequency.value = 4;
@@ -69,7 +67,6 @@ function startProcessingSound() {
     lfoNode.connect(lfoGain);
     lfoGain.connect(processingGain.gain);
 
-    // Base volume
     processingGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
 
     processingOscillator.connect(processingGain);
@@ -120,7 +117,6 @@ function playSuccessSound() {
     const gain = audioCtx.createGain();
 
     osc.type = 'triangle';
-    // Arpeggio
     osc.frequency.setValueAtTime(440, audioCtx.currentTime);
     osc.frequency.setValueAtTime(554.37, audioCtx.currentTime + 0.1);
     osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.2);
@@ -177,9 +173,7 @@ function playTypingSound() {
 async function apiRequest(endpoint, method = 'GET', body = null) {
     const options = {
         method,
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
     };
     if (body) options.body = JSON.stringify(body);
 
@@ -224,7 +218,6 @@ async function typeLine(text, isCritical = false) {
 
 async function welcomeSequence() {
     if (window.location.pathname.includes('command-center.html') || window.location.pathname.endsWith('/')) {
-        // Only run if not already populated (optional check, but good for SPA feel if we had it)
         const feed = document.getElementById('intelligence_feed');
         if (feed && feed.children.length === 0) {
             await typeLine("INITIALIZING HIGH NOIR PROTOCOL...");
@@ -234,15 +227,25 @@ async function welcomeSequence() {
     }
 }
 
-// Command Center Logic
+// ── Command Center ────────────────────────────────────────────────────────────
 async function startScan() {
     const targetUrl = document.getElementById('target_url').value;
     const scanName = document.getElementById('scan_name').value;
-    const maxCases = document.getElementById('max_cases').value || 3;
 
-    // Get intensity value from the FUZZING_INTENSITY input (#max_cases in the HTML)
-    const intensityInput = document.getElementById('max_cases');
-    const intensityValue = intensityInput ? parseInt(intensityInput.value) || 5 : 5;
+    // Read from the correct input id (fixed from previous bug where it was 'max_cases')
+    const intensityInput = document.getElementById('fuzzing_intensity');
+    const intensityValue = intensityInput
+        ? Math.min(10, Math.max(1, parseInt(intensityInput.value) || 5))
+        : 5;
+
+    const intensityLabels = {
+        1: 'LOW', 2: 'LOW', 3: 'LOW',
+        4: 'MEDIUM', 5: 'MEDIUM',
+        6: 'HIGH', 7: 'HIGH',
+        8: 'VERY HIGH', 9: 'VERY HIGH',
+        10: 'EXTREME'
+    };
+    const intensityLabel = intensityLabels[intensityValue] || 'MEDIUM';
 
     if (!targetUrl) {
         await typeLine("ERROR: TARGET_SPEC_URL IS NULL", true);
@@ -252,7 +255,7 @@ async function startScan() {
 
     playSuccessSound();
     await typeLine(`INITIATING SCAN: ${scanName || 'UNNAMED_ALPHA'}`);
-    await typeLine(`FUZZING INTENSITY: ${intensityValue}/10`);
+    await typeLine(`FUZZING INTENSITY: ${intensityValue}/10 [${intensityLabel}]`);
 
     const sec01 = document.getElementById('sec-01');
     if (sec01) sec01.classList.add('pulse');
@@ -261,18 +264,16 @@ async function startScan() {
         target_url: targetUrl,
         spec_url: targetUrl,
         scan_name: scanName,
-        max_cases_per_field: parseInt(maxCases),
-        fuzzing_intensity: intensityValue
+        fuzzing_intensity: intensityValue,
     });
 
     if (result.scan_id) {
         await typeLine(`SCAN_STARTED: ${result.scan_id}`);
         await typeLine("TRANSITIONING TO THE LAB...", true);
         localStorage.setItem('current_scan_id', result.scan_id);
+        localStorage.setItem('current_intensity', intensityValue);
 
-        setTimeout(() => {
-            window.location.href = 'the-lab.html';
-        }, 1500);
+        setTimeout(() => { window.location.href = 'the-lab.html'; }, 1500);
     } else {
         await typeLine(`CRITICAL_FAILURE: ${result.error || 'UNKNOWN_ERROR'}`, true);
         playErrorSound();
@@ -281,7 +282,7 @@ async function startScan() {
     }
 }
 
-// The Lab Logic
+// ── The Lab ───────────────────────────────────────────────────────────────────
 let previousEndpointCount = 0;
 
 async function updateScanStatus() {
@@ -291,7 +292,6 @@ async function updateScanStatus() {
     const status = await apiRequest(`/scan/${scanId}`);
     if (status.error) return;
 
-    // Start processing sound if running and not already playing
     if (status.status === 'running' && !processingOscillator) {
         startProcessingSound();
     }
@@ -304,9 +304,7 @@ async function updateScanStatus() {
     if (statusTextEl) statusTextEl.innerText = status.status.toUpperCase();
 
     if (endpointsListEl && status.endpoints) {
-        // Verify if we have new endpoints to play sound
         if (status.endpoints.length > previousEndpointCount) {
-            // Play multiple blips if many added, or just one
             playDataBlip();
             previousEndpointCount = status.endpoints.length;
         }
@@ -334,7 +332,6 @@ async function updateScanStatus() {
     if (status.status === 'completed') {
         if (processingOscillator) stopProcessingSound();
 
-        // Only run completion logic once
         if (statusInterval) {
             clearInterval(statusInterval);
             statusInterval = null;
@@ -344,76 +341,157 @@ async function updateScanStatus() {
     }
 }
 
-// War Room Logic
+// ── War Room ──────────────────────────────────────────────────────────────────
+// KEY FIX: Call /report (reads from DB with correct caused_failure values)
+//          NOT /results (uses stale in-memory data built before rules.py fix)
 async function loadResults() {
     const scanId = localStorage.getItem('current_scan_id');
     if (!scanId) return;
 
-    const results = await apiRequest(`/scan/${scanId}/results`);
-    if (results.error) return;
+    const results = await apiRequest(`/scan/${scanId}/report`);
+
+    // Scan still running — retry after 3s
+    if (results.error) {
+        if (results.error.includes('not completed') || results.error.includes('running')) {
+            setTimeout(loadResults, 3000);
+        } else {
+            console.error("Failed to load results:", results.error);
+        }
+        return;
+    }
 
     playSuccessSound();
 
-    document.getElementById('total_tests').innerText = results.statistics.tests || results.statistics.total_tests;
-    document.getElementById('total_failures').innerText = results.statistics.failures;
-    document.getElementById('endpoints_count').innerText = results.statistics.endpoints;
+    // ── Stats ──────────────────────────────────────────────────────────────
+    // /report returns: statistics.total_tests, .total_failures, .endpoints_tested
+    const stats = results.statistics || {};
+    const totalTestsEl = document.getElementById('total_tests');
+    const totalFailuresEl = document.getElementById('total_failures');
+    const endpointsEl = document.getElementById('endpoints_count');
 
+    if (totalTestsEl) totalTestsEl.innerText = stats.total_tests ?? 0;
+    if (totalFailuresEl) totalFailuresEl.innerText = stats.total_failures ?? 0;
+    if (endpointsEl) endpointsEl.innerText = stats.endpoints_tested ?? 0;
+
+    // ── Failure Cards ──────────────────────────────────────────────────────
+    // /report failures[] fields:
+    //   endpoint, http_method, field_name, edge_case_type, edge_case_value,
+    //   failure_type, status_code, response_time_ms
     const failuresEl = document.getElementById('failures_list');
     if (failuresEl) {
+        const failures = results.failures || [];
         const fragment = document.createDocumentFragment();
-        for (const f of results.failures) {
-            const card = document.createElement('div');
-            card.classList.add('glass-card', 'failure-card');
 
-            // Header row: method + type
-            const header = document.createElement('div');
-            header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;';
+        if (failures.length === 0) {
+            const noFail = document.createElement('div');
+            noFail.style.cssText = 'color:#888; font-size:0.9rem; padding:2rem; text-align:center;';
+            noFail.textContent = '✅ NO CRITICAL FAILURES DETECTED — API IS RESILIENT';
+            fragment.appendChild(noFail);
+        } else {
+            for (const f of failures) {
+                const card = document.createElement('div');
+                card.classList.add('glass-card', 'failure-card');
 
-            const methodSpan = document.createElement('span');
-            methodSpan.classList.add('method', `method-${f.method}`);
-            methodSpan.textContent = f.method;
+                // Header: method badge + failure type badge
+                const header = document.createElement('div');
+                header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;';
 
-            const typeSpan = document.createElement('span');
-            typeSpan.classList.add('status', 'status-failed');
-            typeSpan.textContent = f.type;
+                const method = (f.http_method || 'GET').toUpperCase();
+                const methodSpan = document.createElement('span');
+                methodSpan.classList.add('method', `method-${method.toLowerCase()}`);
+                methodSpan.textContent = method;
 
-            header.appendChild(methodSpan);
-            header.appendChild(typeSpan);
-            card.appendChild(header);
+                const typeSpan = document.createElement('span');
+                typeSpan.classList.add('status', 'status-failed');
+                typeSpan.textContent = (f.failure_type || 'unknown').toUpperCase();
 
-            // URL row
-            const urlDiv = document.createElement('div');
-            urlDiv.style.cssText = 'font-family: monospace; font-size: 0.9rem; color: #fff; margin-bottom: 1rem;';
-            urlDiv.textContent = f.url;
-            card.appendChild(urlDiv);
+                header.appendChild(methodSpan);
+                header.appendChild(typeSpan);
+                card.appendChild(header);
 
-            // Payload row
-            const payloadWrapper = document.createElement('div');
-            payloadWrapper.style.cssText = 'background: rgba(0,0,0,0.5); padding: 10px; border-radius: 4px; font-size: 0.8rem; border: 1px solid var(--border);';
+                // Endpoint path
+                const urlDiv = document.createElement('div');
+                urlDiv.style.cssText = 'font-family:monospace; font-size:0.9rem; color:#fff; margin-bottom:1rem;';
+                urlDiv.textContent = f.endpoint || '—';
+                card.appendChild(urlDiv);
 
-            const payloadLabel = document.createElement('div');
-            payloadLabel.style.cssText = 'color: var(--text-muted); margin-bottom: 5px;';
-            payloadLabel.textContent = 'Payload:';
+                // Status code + latency
+                if (f.status_code || f.response_time_ms) {
+                    const metaDiv = document.createElement('div');
+                    metaDiv.style.cssText = 'font-size:0.8rem; color:#888; margin-bottom:0.5rem;';
+                    metaDiv.textContent = [
+                        f.status_code ? `HTTP ${f.status_code}` : null,
+                        f.response_time_ms ? `${Math.round(f.response_time_ms)}ms` : null,
+                    ].filter(Boolean).join('  •  ');
+                    card.appendChild(metaDiv);
+                }
 
-            const payloadCode = document.createElement('code');
-            payloadCode.textContent = f.payload;
+                // Payload
+                const payloadWrapper = document.createElement('div');
+                payloadWrapper.style.cssText = 'background:rgba(0,0,0,0.5); padding:10px; border-radius:4px; font-size:0.8rem; border:1px solid var(--border);';
 
-            payloadWrapper.appendChild(payloadLabel);
-            payloadWrapper.appendChild(payloadCode);
-            card.appendChild(payloadWrapper);
+                const payloadLabel = document.createElement('div');
+                payloadLabel.style.cssText = 'color:var(--text-muted); margin-bottom:5px;';
+                payloadLabel.textContent = 'Payload:';
 
-            fragment.appendChild(card);
+                const payloadCode = document.createElement('code');
+                if (f.field_name && f.edge_case_value != null) {
+                    payloadCode.textContent = `${f.field_name} = ${f.edge_case_value}`;
+                } else if (f.edge_case_type) {
+                    payloadCode.textContent = `[${f.edge_case_type}]`;
+                } else {
+                    payloadCode.textContent = '—';
+                }
+
+                payloadWrapper.appendChild(payloadLabel);
+                payloadWrapper.appendChild(payloadCode);
+                card.appendChild(payloadWrapper);
+
+                fragment.appendChild(card);
+            }
         }
+
         failuresEl.replaceChildren(fragment);
 
-        if (results.failures.length > 0) {
-            setTimeout(playErrorSound, 500); // Play after success sound
+        if (failures.length > 0) {
+            setTimeout(playErrorSound, 500);
         }
     }
 
+    // ── Analysis Report ────────────────────────────────────────────────────
+    // Build a text summary since /report doesn't have a pre-formatted string
     const reportEl = document.getElementById('formatted_report');
     if (reportEl) {
-        reportEl.innerText = results.formatted_report;
+        const s = results.statistics || {};
+        const fbt = results.failures_by_type || {};
+        const ml = results.ml_insights;
+
+        let report = `SCAN_ID:  ${results.scan_id || scanId}\n`;
+        report += `NAME:     ${results.scan_name || '—'}\n`;
+        report += `TARGET:   ${results.target_url || '—'}\n`;
+        report += `STATUS:   ${(results.status || '').toUpperCase()}\n`;
+        report += `DURATION: ${results.duration_seconds ?? '?'}s\n`;
+        report += `\n── STATISTICS ──────────────────────\n`;
+        report += `Total Tests:    ${s.total_tests ?? 0}\n`;
+        report += `Total Failures: ${s.total_failures ?? 0}\n`;
+        report += `Failure Rate:   ${s.failure_rate ?? 0}%\n`;
+        report += `Endpoints:      ${s.endpoints_tested ?? 0}\n`;
+
+        if (Object.keys(fbt).length > 0) {
+            report += `\n── FAILURES BY TYPE ────────────────\n`;
+            for (const [type, count] of Object.entries(fbt)) {
+                report += `${type.padEnd(22)} ${count}\n`;
+            }
+        }
+
+        if (ml) {
+            report += `\n── ML INSIGHTS ─────────────────────\n`;
+            report += `Avg Failure Probability: ${ml.avg_failure_probability}\n`;
+            report += `High Risk Fields:        ${ml.high_risk_count}\n`;
+            report += `Low Risk Fields:         ${ml.low_risk_count}\n`;
+        }
+
+        reportEl.innerText = report;
     }
 }
 
@@ -422,14 +500,12 @@ let statusInterval;
 function init() {
     const page = window.location.pathname.split('/').pop();
 
-    // Attach event listeners for sounds to all buttons/links
     const interactives = document.querySelectorAll('button, a, .btn-launch');
     interactives.forEach(el => {
         el.addEventListener('click', playClickSound);
         el.addEventListener('mouseenter', playHoverSound);
     });
 
-    // Try to resume AudioContext on page load interaction (usually requires user input)
     document.body.addEventListener('click', () => {
         if (audioCtx.state === 'suspended') audioCtx.resume();
     }, { once: true });

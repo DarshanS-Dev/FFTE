@@ -10,16 +10,35 @@
 </head>
 
 <body>
+    <script>
+        // Removed restrictive auth block so user can navigate directly
+        function logout() {
+            localStorage.removeItem('ffte_user');
+            window.location.href = 'auth.html';
+        }
+    </script>
     <nav class="noir-nav">
         <div class="nav-logo-section" style="display: flex; align-items: center; gap: 12px;">
             <img src="assets/logo.png" alt="FFTE" style="height: 48px;">
         </div>
-        <div class="nav-links-section">
-            <a href="http://localhost:5173">00 HOME</a>
+        <div class="nav-links-section" id="nav-links"></div>
+    </nav>
+    <script>
+        const navLinks = document.getElementById('nav-links');
+        const isLoggedIn = !!localStorage.getItem('ffte_user');
+        navLinks.innerHTML = `
+            <a href="http://localhost:5173/">00 HOME</a>
             <a href="http://localhost:3000/command-center.html" class="active">01 COMMAND CENTER</a>
             <a href="http://localhost:3000/the-lab.html">02 THE LAB</a>
             <a href="http://localhost:3000/war-room.html">03 WAR ROOM</a>
-        </div>
+            ${isLoggedIn ? `
+                <a href="http://localhost:3000/profile.html">04 PROFILE</a>
+                <a href="#" onclick="logout(); return false;" class="nav-link" style="color: #FF0000; border-left: 1px solid #333; margin-left: 10px;">LOGOUT</a>
+            ` : `
+                <a href="http://localhost:3000/auth.html" class="nav-link" style="color: #FF0000; border-left: 1px solid #333; margin-left: 10px;">LOGIN</a>
+            `}
+        `;
+    </script>
     </nav>
 
     <div class="high-noir-container">
@@ -40,9 +59,11 @@
                 </div>
 
                 <label class="section-label"><span class="section-number" id="sec-03">03</span>
-                    FUZZING_INTENSITY</label>
+                    FUZZING_INTENSITY <span style="color: var(--text-muted); font-size: 0.7rem;">(1=LOW / 5=MEDIUM /
+                        10=EXTREME)</span></label>
                 <div class="input-field-wrapper">
-                    <input type="number" id="max_cases" value="3" min="1" max="10">
+                    <!-- FIX: Changed default from 3 to 5 (medium), added id="fuzzing_intensity" -->
+                    <input type="number" id="fuzzing_intensity" value="5" min="1" max="10">
                 </div>
             </div>
 

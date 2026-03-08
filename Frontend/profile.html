@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FFTE // DIAGNOSTIC STREAM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Inter:wght@400;900&display=swap"
+    rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #000;
+      --grid: #1A1A1A;
+      --border: #333;
+      --red: #FF0000;
+      --red-glow: rgba(255, 0, 0, 0.35);
+      --muted: #888;
+      --card: rgba(0, 0, 0, 0.92);
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', sans-serif;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 50px 50px;
+      color: #fff;
+      font-family: var(--mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #000;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #222;
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #444;
+    }
+
+    /* ── Layout ── */
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 80px 40px 160px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Search ── */
+    .search-wrap {
+      position: relative;
+      margin-bottom: 40px;
+    }
+
+    .search-wrap svg {
+      position: absolute;
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      opacity: 0.25;
+      transition: opacity 0.2s;
+      pointer-events: none;
+    }
+
+    .search-wrap:focus-within svg {
+      opacity: 1;
+      color: var(--red);
+    }
+
+    .search-input {
+      width: 100%;
+      background: #0A0A0A;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 999px;
+      padding: 14px 20px 14px 52px;
+      color: rgba(255, 255, 255, 0.6);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.3em;
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: rgba(255, 0, 0, 0.3);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* ── Header Row ── */
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 8px;
+      margin-bottom: 80px;
+    }
+
+    .header-title {
+      font-family: var(--sans);
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      text-transform: uppercase;
+      font-style: italic;
+    }
+
+    /* ── User Card ── */
+    .user-card {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .avatar-wrap {
+      position: relative;
+    }
+
+    .corner {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-color: var(--red);
+      border-width: 2px;
+      opacity: 0.6;
+    }
+
+    .corner.tl {
+      top: -4px;
+      left: -4px;
+      border-top: solid;
+      border-left: solid;
+    }
+
+    .corner.tr {
+      top: -4px;
+      right: -4px;
+      border-top: solid;
+      border-right: solid;
+    }
+
+    .corner.bl {
+      bottom: -4px;
+      left: -4px;
+      border-bottom: solid;
+      border-left: solid;
+    }
+
+    .corner.br {
+      bottom: -4px;
+      right: -4px;
+      border-bottom: solid;
+      border-right: solid;
+    }
+
+    .avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.03);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .avatar-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 2px solid var(--red);
+      animation: pulse-ring 3s ease-in-out infinite;
+    }
+
+    .avatar-letter {
+      font-family: var(--sans);
+      font-size: 20px;
+      font-weight: 900;
+      font-style: italic;
+      z-index: 1;
+    }
+
+    @keyframes pulse-ring {
+
+      0%,
+      100% {
+        transform: scale(0.95);
+        opacity: 0.8;
+      }
+
+      50% {
+        transform: scale(1.1);
+        opacity: 0.3;
+      }
+    }
+
+    .user-info .name {
+      font-family: var(--sans);
+      font-size: 14px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+
+    .user-info .meta {
+      font-size: 9px;
+      color: var(--red);
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .btn-share {
+      padding: 10px 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-share:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: scale(1.05);
+    }
+
+    .btn-share:active {
+      transform: scale(0.96);
+    }
+
+    /* ── Stat Carousel ── */
+    .carousel-wrap {
+      position: relative;
+      border: 1px solid var(--border);
+      background: #000;
+      height: 110px;
+      margin-bottom: 80px;
+      overflow: hidden;
+    }
+
+    .carousel-slide {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      padding: 0 64px;
+      border-left: 5px solid var(--red);
+      background: linear-gradient(90deg, rgba(15, 0, 0, 1), transparent);
+      opacity: 0;
+      transform: translateX(60px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+      pointer-events: none;
+    }
+
+    .carousel-slide.active {
+      opacity: 1;
+      transform: translateX(0);
+      pointer-events: auto;
+    }
+
+    .slide-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .slide-left {
+      display: flex;
+      align-items: center;
+      gap: 40px;
+    }
+
+    .slide-icon {
+      opacity: 0.2;
+      color: var(--red);
+    }
+
+    .slide-label {
+      font-size: 9px;
+      color: var(--red);
+      font-weight: 700;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .slide-value {
+      font-family: var(--sans);
+      font-size: 42px;
+      font-weight: 900;
+      line-height: 0.85;
+      letter-spacing: -0.04em;
+    }
+
+    .slide-value.big {
+      font-size: 76px;
+      text-shadow: 0 0 30px var(--red-glow);
+    }
+
+    .slide-sub {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      max-width: 200px;
+      text-align: right;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      position: relative;
+      border-top: 1px solid rgba(255, 0, 0, 0.2);
+      margin-bottom: 0;
+    }
+
+    .divider-label {
+      position: absolute;
+      right: 0;
+      top: -11px;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.4em;
+      color: rgba(255, 0, 0, 0.4);
+      text-transform: uppercase;
+      background: #000;
+      padding: 0 8px;
+    }
+
+    /* ── Terminal Feed ── */
+    .terminal {
+      border: 1px solid var(--red);
+      background: #000;
+      margin-bottom: 80px;
+      box-shadow: 0 0 100px rgba(255, 0, 0, 0.04);
+    }
+
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 40px;
+      border-bottom: 1px solid #333;
+      background: #080808;
+    }
+
+    .mac-dots {
+      display: flex;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .dot.red {
+      background: #FF5F56;
+      box-shadow: 0 0 6px rgba(255, 95, 86, 0.5);
+    }
+
+    .dot.yellow {
+      background: #FFBD2E;
+      box-shadow: 0 0 6px rgba(255, 189, 46, 0.4);
+    }
+
+    .dot.green {
+      background: #27C93F;
+      box-shadow: 0 0 6px rgba(39, 201, 63, 0.4);
+    }
+
+    .terminal-title {
+      font-size: 11px;
+      letter-spacing: 0.6em;
+      color: #444;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .terminal-status {
+      font-size: 11px;
+      color: var(--red);
+      font-weight: 700;
+    }
+
+    .terminal-body {
+      min-height: 400px;
+    }
+
+    .terminal-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 400px;
+      color: #111;
+    }
+
+    .terminal-empty svg {
+      margin-bottom: 24px;
+      opacity: 0.15;
+    }
+
+    .terminal-empty p {
+      font-size: 12px;
+      letter-spacing: 0.5em;
+      text-transform: uppercase;
+    }
+
+    /* ── Scan Row ── */
+    .scan-row {
+      display: flex;
+      align-items: center;
+      gap: 40px;
+      padding: 20px 40px;
+      border-bottom: 1px solid #1A1A1A;
+      border-left: 3px solid transparent;
+      transition: background 0.2s, border-left-color 0.2s;
+      cursor: pointer;
+      animation: fadeSlideIn 0.3s ease both;
+    }
+
+    @keyframes fadeSlideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .scan-row:hover {
+      background: rgba(255, 255, 255, 0.03);
+      border-left-color: var(--red);
+    }
+
+    .scan-row:last-child {
+      border-bottom: none;
+    }
+
+    .scan-info {
+      flex: 1;
+    }
+
+    .scan-name {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      transition: color 0.2s;
+    }
+
+    .scan-row:hover .scan-name {
+      color: var(--red);
+    }
+
+    .scan-meta {
+      font-size: 11px;
+      color: #444;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .scan-stats {
+      display: flex;
+      align-items: center;
+    }
+
+    .stat-col {
+      padding: 0 32px;
+      border-right: 1px solid #1A1A1A;
+      text-align: right;
+    }
+
+    .stat-col:last-child {
+      border-right: none;
+      padding-right: 0;
+    }
+
+    .stat-val {
+      font-family: var(--sans);
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+    }
+
+    .stat-key {
+      font-size: 10px;
+      color: #333;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+    }
+
+    /* ── Add Scan Form ── */
+    .add-scan-section {
+      margin-bottom: 80px;
+    }
+
+    .add-scan-toggle {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(255, 0, 0, 0.6);
+      background: none;
+      border: 1px dashed rgba(255, 0, 0, 0.2);
+      padding: 12px 24px;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s;
+      justify-content: center;
+    }
+
+    .add-scan-toggle:hover {
+      background: rgba(255, 0, 0, 0.04);
+      border-color: rgba(255, 0, 0, 0.4);
+      color: var(--red);
+    }
+
+    .add-scan-form {
+      border: 1px solid rgba(255, 0, 0, 0.2);
+      padding: 32px 40px;
+      display: none;
+      gap: 20px;
+      flex-wrap: wrap;
+      background: rgba(0, 0, 0, 0.8);
+    }
+
+    .add-scan-form.open {
+      display: flex;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .field-label {
+      font-size: 9px;
+      color: var(--red);
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .field-input {
+      background: #0A0A0A;
+      border: 1px solid #222;
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .field-input:focus {
+      border-color: rgba(255, 0, 0, 0.4);
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    .btn-add {
+      padding: 10px 28px;
+      background: var(--red);
+      border: none;
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-add:hover {
+      background: #cc0000;
+    }
+
+    .btn-cancel {
+      padding: 10px 20px;
+      background: transparent;
+      border: 1px solid #333;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-cancel:hover {
+      border-color: #555;
+      color: #fff;
+    }
+
+    /* ── Graph ── */
+    .graph-wrap {
+      border: 1px solid #333;
+      background: rgba(0, 0, 0, 0.9);
+      padding: 48px;
+      overflow: hidden;
+      position: relative;
+      margin-bottom: 80px;
+    }
+
+    .graph-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 56px;
+    }
+
+    .graph-subtitle {
+      font-size: 11px;
+      letter-spacing: 0.5em;
+      color: var(--red);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+
+    .graph-title {
+      font-family: var(--sans);
+      font-size: 28px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: -0.03em;
+    }
+
+    .graph-badge {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 20px;
+      border: 1px solid #333;
+      background: #000;
+    }
+
+    .graph-badge svg {
+      color: var(--red);
+    }
+
+    .graph-badge span {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.6);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .graph-area {
+      position: relative;
+      height: 220px;
+      width: 100%;
+    }
+
+    .graph-area svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .axis-label-y {
+      position: absolute;
+      left: -32px;
+      top: 50%;
+      transform: translateY(-50%) rotate(-90deg);
+      font-size: 9px;
+      color: #222;
+      letter-spacing: 0.5em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .axis-label-x {
+      text-align: center;
+      font-size: 9px;
+      color: #222;
+      letter-spacing: 0.5em;
+      text-transform: uppercase;
+      margin-top: 16px;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 120px;
+      border-top: 1px solid #1A1A1A;
+      padding-top: 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      letter-spacing: 0.6em;
+      color: #333;
+      text-transform: uppercase;
+    }
+
+    .footer a {
+      color: inherit;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer a:hover {
+      color: var(--red);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 48px;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 32px;
+      right: 32px;
+      z-index: 999;
+      background: #0A0A0A;
+      border: 1px solid var(--red);
+      padding: 14px 24px;
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: #fff;
+      transform: translateY(80px);
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .page {
+        padding: 60px 20px 100px;
+      }
+
+      .header-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 24px;
+      }
+
+      .scan-stats {
+        display: none;
+      }
+    }
+
+    /* ── Navigation ── */
+    .noir-nav {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      height: 60px;
+      background: #000000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 2rem;
+      z-index: 1000;
+      border-bottom: 1px solid #1A1A1A;
+    }
+
+    .nav-logo-section {
+      color: #FFFFFF;
+      font-family: 'Inter', sans-serif;
+      font-weight: 900;
+      font-size: 1.25rem;
+      letter-spacing: -0.05em;
+      text-transform: uppercase;
+    }
+
+    .nav-links-section {
+      display: flex;
+      gap: 0.5rem;
+      height: 100%;
+    }
+
+    .noir-nav a {
+      color: #888888;
+      text-decoration: none;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 0 1.5rem;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+    }
+
+    .noir-nav a.active {
+      background: #FF0000;
+      color: #FFFFFF;
+    }
+
+    .noir-nav a:hover:not(.active) {
+      color: #FFFFFF;
+      background: rgba(255, 255, 255, 0.05);
+    }
+  </style>
+</head>
+
+<body>
+  <script>
+    // Removed restrictive auth block so user can navigate directly
+    function logout() {
+      localStorage.removeItem('ffte_user');
+      window.location.href = 'auth.html';
+    }
+  </script>
+  <nav class="noir-nav">
+    <div class="nav-logo-section" style="display: flex; align-items: center; gap: 12px;">
+      <img src="assets/logo.png" alt="FFTE" style="height: 48px;">
+    </div>
+    <div class="nav-links-section" id="nav-links"></div>
+  </nav>
+  <script>
+    const navLinks = document.getElementById('nav-links');
+    const isLoggedIn = !!localStorage.getItem('ffte_user');
+    navLinks.innerHTML = `
+          <a href="http://localhost:5173/">00 HOME</a>
+          <a href="http://localhost:3000/command-center.html">01 COMMAND CENTER</a>
+          <a href="http://localhost:3000/the-lab.html">02 THE LAB</a>
+          <a href="http://localhost:3000/war-room.html">03 WAR ROOM</a>
+          ${isLoggedIn ? `
+              <a href="http://localhost:3000/profile.html" class="active">04 PROFILE</a>
+              <a href="#" onclick="logout(); return false;" class="nav-link" style="color: #FF0000; border-left: 1px solid #333; margin-left: 10px;">LOGOUT</a>
+          ` : `
+              <a href="http://localhost:3000/auth.html" class="nav-link" style="color: #FF0000; border-left: 1px solid #333; margin-left: 10px;">LOGIN</a>
+          `}
+      `;
+  </script>
+
+  <div class="page">
+
+    <!-- Search -->
+    <div class="search-wrap">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.35-4.35" />
+      </svg>
+      <input id="searchInput" class="search-input" type="text" placeholder="SEARCH DIAGNOSTICS_DATA..."
+        oninput="filterScans(this.value)" />
+    </div>
+
+    <!-- Header Row -->
+    <div class="header-row">
+      <h2 class="header-title">Your Diagnostic Stream</h2>
+      <div class="user-card">
+        <div class="avatar-wrap">
+          <div class="corner tl"></div>
+          <div class="corner tr"></div>
+          <div class="corner bl"></div>
+          <div class="corner br"></div>
+          <div class="avatar">
+            <div class="avatar-ring"></div>
+            <span class="avatar-letter" id="avatarLetter">X</span>
+          </div>
+        </div>
+        <div class="user-info">
+          <div class="name" id="userName">Faulty Devil</div>
+          <div class="meta" id="userMeta">0 FOLLOWING // LEVEL_III</div>
+        </div>
+        <button class="btn-share" onclick="shareProfile()">Share Profile</button>
+      </div>
+    </div>
+
+    <!-- Stat Carousel -->
+    <div class="carousel-wrap" id="carousel">
+      <div class="carousel-slide active" id="slide-0">
+        <div class="slide-inner">
+          <div class="slide-left">
+            <div class="slide-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            </div>
+            <div>
+              <div class="slide-label">TOTAL FAILURES</div>
+              <div class="slide-value big" id="stat-failures">0</div>
+            </div>
+          </div>
+          <div class="slide-sub">Aggregated anomalies across all nodes</div>
+        </div>
+      </div>
+      <div class="carousel-slide" id="slide-1">
+        <div class="slide-inner">
+          <div class="slide-left">
+            <div class="slide-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </div>
+            <div>
+              <div class="slide-label">TOTAL TESTS</div>
+              <div class="slide-value" id="stat-tests">0</div>
+            </div>
+          </div>
+          <div class="slide-sub">Full system validation cycle count</div>
+        </div>
+      </div>
+      <div class="carousel-slide" id="slide-2">
+        <div class="slide-inner">
+          <div class="slide-left">
+            <div class="slide-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+            </div>
+            <div>
+              <div class="slide-label">SURFACE_ID</div>
+              <div class="slide-value" id="stat-scans">0</div>
+            </div>
+          </div>
+          <div class="slide-sub">Validated penetration entry points</div>
+        </div>
+      </div>
+      <div class="carousel-slide" id="slide-3">
+        <div class="slide-inner">
+          <div class="slide-left">
+            <div class="slide-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+            </div>
+            <div>
+              <div class="slide-label">PASS_RATE</div>
+              <div class="slide-value" id="stat-rate">0<span
+                  style="font-size:40%;color:var(--red);margin-left:4px">%</span></div>
+            </div>
+          </div>
+          <div class="slide-sub">Aggregate stability index</div>
+        </div>
+      </div>
+    </div>
+
+
+
+    <!-- Terminal Feed -->
+    <div class="terminal" id="terminal">
+      <div class="terminal-header">
+        <div class="mac-dots">
+          <div class="dot red"></div>
+          <div class="dot yellow"></div>
+          <div class="dot green"></div>
+        </div>
+        <div class="terminal-title">Live_Operational_Feed</div>
+        <div class="terminal-status">● STREAM_ACTIVE</div>
+      </div>
+      <div class="terminal-body" id="terminalBody">
+        <div class="terminal-empty">
+          <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+            <polyline points="4 17 10 11 4 5" />
+            <line x1="12" y1="19" x2="20" y2="19" />
+          </svg>
+          <p>No incoming satellite data</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="divider" style="margin-bottom:80px"><span class="divider-label">// ANALYTICS_STREAM</span></div>
+
+    <!-- Failure Trajectory Graph -->
+    <div class="graph-wrap">
+      <div class="graph-header">
+        <div>
+          <div class="graph-subtitle">FAIL_SIGNAL_METRICS_V2</div>
+          <div class="graph-title">Failure Trajectory</div>
+        </div>
+        <div class="graph-badge">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+            <polyline points="17 6 23 6 23 12" />
+          </svg>
+          <span>Live Temporal Stream</span>
+        </div>
+      </div>
+      <div class="graph-area">
+        <div class="axis-label-y">Anomalies_Found_Y</div>
+        <svg id="graphSvg" viewBox="0 0 1000 400" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="axis-label-x">Protocol_Time_Stream_X</div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <span>System.Protocol // FFTE_CORE_V2.1</span>
+      <div class="footer-links">
+        <a href="#">Archive_Sync</a>
+        <span style="color:rgba(255,255,255,0.04);font-weight:900;letter-spacing:-0.02em">Node_Status: Optimum</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ── Storage Helpers ──────────────────────────────────────────────
+    const PROFILE_KEY = 'ffte_profile_v1';
+    const API_BASE = 'http://localhost:8001';
+
+    function loadProfile() {
+      try {
+        return JSON.parse(localStorage.getItem(PROFILE_KEY)) || { name: 'Faulty Devil', level: 'LEVEL_III' };
+      } catch { return { name: 'Faulty Devil', level: 'LEVEL_III' }; }
+    }
+
+    // ── State ────────────────────────────────────────────────────────
+    let scans = [];
+    let profile = loadProfile();
+    let currentSlide = 0;
+    let slideInterval = null;
+    let filterQuery = '';
+
+    // ── Profile ──────────────────────────────────────────────────────
+    function initProfile() {
+      document.getElementById('userName').textContent = profile.name;
+      document.getElementById('avatarLetter').textContent = profile.name.charAt(0).toUpperCase();
+      document.getElementById('userMeta').textContent = `0 FOLLOWING // ${profile.level}`;
+    }
+
+    // ── Stats ────────────────────────────────────────────────────────
+    function computeStats() {
+      const totalTests = scans.reduce((s, r) => s + (r.tests_executed || 0), 0);
+      const totalFailures = scans.reduce((s, r) => s + (r.failures_found || 0), 0);
+      const totalScans = scans.length;
+      const passRate = totalTests > 0 ? Math.round(((totalTests - totalFailures) / totalTests) * 100) : 0;
+      return { totalTests, totalFailures, totalScans, passRate };
+    }
+
+    function animateCount(el, target, suffix = '') {
+      let start = 0;
+      const dur = 1400;
+      const startTime = performance.now();
+      const tick = (now) => {
+        const p = Math.min((now - startTime) / dur, 1);
+        const ease = 1 - Math.pow(1 - p, 4);
+        const val = Math.round(target * ease);
+        el.childNodes[0].nodeValue = val.toLocaleString();
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+
+    function updateStats() {
+      const s = computeStats();
+
+      // Update slide values with animation
+      const failEl = document.getElementById('stat-failures');
+      failEl.childNodes[0] && (failEl.childNodes[0].nodeValue = '0');
+      animateCount(document.getElementById('stat-failures'), s.totalFailures);
+      animateCount(document.getElementById('stat-tests'), s.totalTests);
+      animateCount(document.getElementById('stat-scans'), s.totalScans);
+      animateCount(document.getElementById('stat-rate'), s.passRate);
+    }
+
+    // ── Carousel ─────────────────────────────────────────────────────
+    function goToSlide(n) {
+      document.getElementById(`slide-${currentSlide}`).classList.remove('active');
+      currentSlide = (n + 4) % 4;
+      document.getElementById(`slide-${currentSlide}`).classList.add('active');
+    }
+
+    function startCarousel() {
+      if (slideInterval) clearInterval(slideInterval);
+      slideInterval = setInterval(() => goToSlide(currentSlide + 1), 3200);
+    }
+    startCarousel();
+
+    // ── Terminal Feed ─────────────────────────────────────────────────
+    function renderScans() {
+      const body = document.getElementById('terminalBody');
+      const filtered = filterQuery
+        ? scans.filter(s => s.name.toLowerCase().includes(filterQuery.toLowerCase()))
+        : scans;
+
+      if (filtered.length === 0) {
+        body.innerHTML = `
+      <div class="terminal-empty">
+        <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        <p>No incoming satellite data</p>
+      </div>`;
+        return;
+      }
+
+      body.innerHTML = filtered.map((scan, i) => {
+        const tests = scan.tests_executed || 0;
+        const failures = scan.failures_found || 0;
+        const passRate = tests > 0 ? Math.round(((tests - failures) / tests) * 100) : 100;
+        const failColor = failures > 0 ? 'var(--red)' : '#fff';
+        const scanTime = new Date(scan.start_time || Date.now());
+        const dateStr = scanTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dateLabel = scanTime.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const isActive = i === 0;
+        return `
+    <div class="scan-row" style="animation-delay:${i * 0.05}s" onclick="deleteScanConfirm('${scan.scan_id}')">
+      <div class="scan-info">
+        <div class="scan-name">
+          ${scan.scan_name}
+          ${isActive ? '<span style="margin-left:10px;padding:2px 8px;background:rgba(255,0,0,0.1);color:var(--red);font-size:8px;font-weight:700;letter-spacing:0.3em;border:1px solid rgba(255,0,0,0.2)">ACTIVE_SPEC</span>' : ''}
+        </div>
+        <div class="scan-meta">TIMESTAMP: ${dateLabel} ${dateStr} // PATH: ${scan.target_url || 'N/A'}</div>
+      </div>
+      <div class="scan-stats">
+        <div class="stat-col">
+          <div class="stat-val">${tests.toLocaleString()}</div>
+          <div class="stat-key">Tests</div>
+        </div>
+        <div class="stat-col">
+          <div class="stat-val" style="color:${failColor}">${failures.toLocaleString()}</div>
+          <div class="stat-key">Failures</div>
+        </div>
+        <div class="stat-col">
+          <div class="stat-val" style="color:var(--red)">${passRate}%</div>
+          <div class="stat-key">Rate</div>
+        </div>
+      </div>
+    </div>`;
+      }).join('');
+    }
+
+    // ── Graph ─────────────────────────────────────────────────────────
+    function renderGraph() {
+      const svg = document.getElementById('graphSvg');
+      const W = 1000, H = 400, pad = 60;
+
+      let data = scans.length > 0
+        ? scans.slice(0, 10).reverse().map(s => ({
+          failures: s.failures_found || 0,
+          time: new Date(s.start_time || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }))
+        : Array(10).fill(0).map((_, i) => ({ failures: 0, time: `0${i}:00` }));
+
+      const maxVal = Math.max(...data.map(d => d.failures), 5);
+      const pts = data.map((d, i) => {
+        const x = pad + (i / Math.max(data.length - 1, 1)) * (W - 2 * pad);
+        const y = H - pad - (d.failures / maxVal) * (H - 2 * pad);
+        return { x, y, ...d };
+      });
+
+      const lineD = `M ${pts.map(p => `${p.x},${p.y}`).join(' L ')}`;
+      const areaD = `${lineD} L ${pts[pts.length - 1].x},${H - pad} L ${pts[0].x},${H - pad} Z`;
+
+      svg.innerHTML = `
+    <defs>
+      <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#FF0000" stop-opacity="0.3" />
+        <stop offset="100%" stop-color="#FF0000" stop-opacity="0" />
+      </linearGradient>
+    </defs>
+    ${[0, 0.25, 0.5, 0.75, 1].map(v => {
+        const y = pad + v * (H - 2 * pad);
+        const label = Math.round(maxVal * (1 - v));
+        return `<line x1="${pad}" y1="${y}" x2="${W - pad}" y2="${y}" stroke="#1A1A1A" stroke-width="1.5"/>
+              <text x="${pad - 16}" y="${y + 5}" fill="#444" font-size="12" font-family="JetBrains Mono, monospace" text-anchor="end">${label}</text>`;
+      }).join('')}
+    ${pts.map((p, i) => {
+        const x = pad + (i / Math.max(pts.length - 1, 1)) * (W - 2 * pad);
+        return `<line x1="${x}" y1="${pad}" x2="${x}" y2="${H - pad}" stroke="#1A1A1A" stroke-width="1.5"/>
+              ${i % 2 === 0 ? `<text x="${x}" y="${H - pad + 28}" fill="#444" font-size="11" font-family="JetBrains Mono, monospace" text-anchor="middle">${p.time}</text>` : ''}`;
+      }).join('')}
+    <path d="${areaD}" fill="url(#cg)" />
+    <path d="${lineD}" fill="none" stroke="#FF0000" stroke-width="3" style="filter:drop-shadow(0 0 8px rgba(255,0,0,0.5))" />
+    ${pts.map((p, i) => `
+      <circle cx="${p.x}" cy="${p.y}" r="10" fill="#FF0000" opacity="0.15"/>
+      <circle cx="${p.x}" cy="${p.y}" r="5" fill="#000" stroke="#FF0000" stroke-width="2.5"/>
+    `).join('')}`;
+    }
+
+    // ── Add/Delete Scan Actions ────────────────────────────────────────
+    async function deleteScanConfirm(id) {
+      if (!confirm('REMOVE THIS SCAN FROM ARCHIVE?')) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/scan/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          scans = scans.filter(s => s.scan_id !== id);
+          refreshAll();
+          showToast('SCAN PURGED FROM STREAM');
+        } else {
+          showToast('OP_FAILED: SERVER ERROR');
+        }
+      } catch (err) {
+        console.error(err);
+        showToast('OP_FAILED: NETWORK ERROR');
+      }
+    }
+
+    // ── Filter ───────────────────────────────────────────────────────
+    function filterScans(q) {
+      filterQuery = q;
+      renderScans();
+    }
+
+    // ── Share ────────────────────────────────────────────────────────
+    function shareProfile() {
+      const s = computeStats();
+      const text = `FFTE Diagnostic Stream\nScans: ${s.totalScans} | Tests: ${s.totalTests} | Failures: ${s.totalFailures} | Pass Rate: ${s.passRate}%`;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => showToast('PROFILE DATA COPIED'));
+      } else {
+        showToast('PROFILE: ' + s.totalScans + ' SCANS LOGGED');
+      }
+    }
+
+    // ── Toast ─────────────────────────────────────────────────────────
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2800);
+    }
+
+    // ── Refresh All ──────────────────────────────────────────────────
+    function refreshAll() {
+      updateStats();
+      renderScans();
+      renderGraph();
+    }
+
+    // ── Init API Fetch ───────────────────────────────────────────────
+    async function fetchScans() {
+      try {
+        const res = await fetch(`${API_BASE}/api/scans?limit=50&offset=0`);
+        if (res.ok) {
+          const data = await res.json();
+          scans = data.scans || [];
+          refreshAll();
+        } else {
+          showToast('ERROR FETCHING DIAGNOSTIC STREAM');
+        }
+      } catch (err) {
+        console.error('Error fetching scans:', err);
+        showToast('OFFLINE // LOCAL DATA PENDING LINK');
+      }
+    }
+
+    initProfile();
+    fetchScans();
+  </script>
+</body>
+
+</html>

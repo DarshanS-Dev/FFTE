@@ -1,0 +1,46 @@
+﻿
+> home(1)@1.0.0 build
+> vite build
+
+[36mvite v7.3.1 [32mbuilding client environment for production...[36m[39m
+[32mΓ£ô[39m 0 modules transformed.
+node.exe : [31mΓ£ù[39m 
+Build failed in 78ms
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
+    + CategoryInfo          
+    : NotSpecified: ([31m  
+  Γ£ù[39m Build failed i   
+ n 78ms:String) [], Remo    
+teException
+    + FullyQualifiedErrorId 
+    : NativeCommandError
+ 
+[31merror during build:
+[31mCould not resolve 
+entry module 
+"profile.html".[31m
+    at getRollupError (file:
+///C:/Users/arjun/OneDrive/D
+esktop/FFTE/Frontend/home/no
+de_modules/rollup/dist/es/sh
+ared/parseAst.js:402:41)
+    at error (file:///C:/Use
+rs/arjun/OneDrive/Desktop/FF
+TE/Frontend/home/node_module
+s/rollup/dist/es/shared/pars
+eAst.js:398:42)
+    at ModuleLoader.loadEntr
+yModule (file:///C:/Users/ar
+jun/OneDrive/Desktop/FFTE/Fr
+ontend/home/node_modules/rol
+lup/dist/es/shared/node-entr
+y.js:21708:20)
+    at async Promise.all 
+(index 1)[39m

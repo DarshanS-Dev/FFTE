@@ -534,6 +534,15 @@ export default function App() {
         restDelta: 0.001
     });
 
+    const isCookieSet = typeof document !== 'undefined' && document.cookie.includes('ffte_auth_sync=1');
+    const isLocalSet = typeof localStorage !== 'undefined' && !!localStorage.getItem('ffte_user');
+    const isLoggedIn = isCookieSet || (isLocalSet && window.location.port !== '5173');
+
+    // Nuke dirty local storage state from port 5173 isolating bugs
+    if (!isCookieSet && isLocalSet && typeof localStorage !== 'undefined') {
+        localStorage.removeItem('ffte_user');
+    }
+
     return (
         <div className="min-h-screen selection:bg-security selection:text-white bg-background text-foreground">
             {/* Progress Line */}
@@ -548,11 +557,20 @@ export default function App() {
                 <div className="flex items-center gap-3">
                     <img src="assets/logo.png" alt="FFTE" className="h-12 w-auto" />
                 </div>
-                <div className="flex h-full gap-2">
-                    <a href="http://localhost:5173" onMouseEnter={() => playHoverSound()} onClick={() => playClickSound()} className="h-full flex items-center px-6 text-xs font-bold tracking-widest bg-[#FF0000] text-white">00 HOME</a>
-                    <a href="http://localhost:3000/command-center.html" onMouseEnter={() => playHoverSound()} onClick={() => playClickSound()} className="h-full flex items-center px-6 text-xs font-bold tracking-widest text-[#888] hover:text-white hover:bg-white/5 transition-all">01 COMMAND CENTER</a>
-                    <a href="http://localhost:3000/the-lab.html" onMouseEnter={() => playHoverSound()} onClick={() => playClickSound()} className="h-full flex items-center px-6 text-xs font-bold tracking-widest text-[#888] hover:text-white hover:bg-white/5 transition-all">02 THE LAB</a>
-                    <a href="http://localhost:3000/war-room.html" onMouseEnter={() => playHoverSound()} onClick={() => playClickSound()} className="h-full flex items-center px-6 text-xs font-bold tracking-widest text-[#888] hover:text-white hover:bg-white/5 transition-all">03 WAR ROOM</a>
+                <div className="flex h-full gap-[0.5rem]">
+                    <a href="http://localhost:5173/" onMouseEnter={() => playHoverSound()} onClick={() => playClickSound()} className="h-full flex items-center px-6 text-[0.75rem] font-bold tracking-[0.1em] uppercase bg-[#FF0000] text-white transition-all">00 HOME</a>
+                    <a href="http://localhost:3000/command-center.html" onMouseEnter={() => playHoverSound()} onClick={() => playClickSound()} className="h-full flex items-center px-6 text-[0.75rem] font-bold tracking-[0.1em] text-[#888888] hover:text-white hover:bg-white/5 transition-all uppercase">01 COMMAND CENTER</a>
+                    <a href="http://localhost:3000/the-lab.html" onMouseEnter={() => playHoverSound()} onClick={() => playClickSound()} className="h-full flex items-center px-6 text-[0.75rem] font-bold tracking-[0.1em] text-[#888888] hover:text-white hover:bg-white/5 transition-all uppercase">02 THE LAB</a>
+                    <a href="http://localhost:3000/war-room.html" onMouseEnter={() => playHoverSound()} onClick={() => playClickSound()} className="h-full flex items-center px-6 text-[0.75rem] font-bold tracking-[0.1em] text-[#888888] hover:text-white hover:bg-white/5 transition-all uppercase">03 WAR ROOM</a>
+
+                    {isLoggedIn ? (
+                        <>
+                            <a href="http://localhost:3000/profile.html" onMouseEnter={() => playHoverSound()} onClick={() => playClickSound()} className="h-full flex items-center px-6 text-[0.75rem] font-bold tracking-[0.1em] text-[#888888] hover:text-white hover:bg-white/5 transition-all uppercase">04 PROFILE</a>
+                            <a href="#" onMouseEnter={() => playHoverSound()} onClick={(e) => { e.preventDefault(); playClickSound(); localStorage.removeItem('ffte_user'); document.cookie = "ffte_auth_sync=; path=/; max-age=0"; window.location.href = 'http://localhost:3000/auth.html'; }} className="h-full flex items-center px-6 text-[0.75rem] font-bold tracking-[0.1em] text-[#FF0000] border-l border-[#333] ml-2 hover:bg-white/5 transition-all uppercase">LOGOUT</a>
+                        </>
+                    ) : (
+                        <a href="http://localhost:3000/auth.html" onMouseEnter={() => playHoverSound()} onClick={() => playClickSound()} className="h-full flex items-center px-6 text-[0.75rem] font-bold tracking-[0.1em] text-[#FF0000] border-l border-[#333] ml-2 hover:bg-white/5 transition-all uppercase">LOGIN</a>
+                    )}
                 </div>
             </nav>
 

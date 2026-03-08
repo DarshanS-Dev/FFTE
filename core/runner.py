@@ -274,6 +274,7 @@ def run(
                         params=fuzzed_params,
                         json=None,
                     )
+                    print(f"DEBUG1 exc={result.exception!r} status={result.status_code}")
 
                     # Persist query-param test execution
                     if db_session is not None and db_scan_uuid is not None:
@@ -383,7 +384,7 @@ def run(
                         params=query_params if query_params else None,
                         json=json_body,
                     )
-
+                    print(f"DEBUG2 exc={result.exception!r} status={result.status_code}")
                     # Persist execution details per test case when DB is available
                     if db_session is not None and db_scan_uuid is not None:
                         try:
@@ -440,7 +441,7 @@ def run(
                     params=query_params if query_params else None,
                     json=None,
                 )
-
+                print(f"DEBUG3 exc={result.exception!r} status={result.status_code}")
                 if db_session is not None and db_scan_uuid is not None:
                     try:
                         classification = classify(result)

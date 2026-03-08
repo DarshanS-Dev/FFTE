@@ -2,23 +2,23 @@ from __future__ import annotations
 
 import logging
 import os
+from dotenv import load_dotenv  # ← ADD THIS
 from collections.abc import Generator
 from typing import Optional
 
 from sqlalchemy import text
 from sqlmodel import SQLModel, Session, create_engine
 
-from db import models  # ensure models are imported so metadata is populated
+load_dotenv()  # ← ADD THIS
+
+from db import models
 
 logger = logging.getLogger("ffte.db")
 
-
-# Database URL from environment, with sensible local default
 DATABASE_URL: str = os.getenv(
     "DATABASE_URL",
     "postgresql://faulty:password@localhost:5432/ffte",
 )
-
 
 engine = create_engine(
     DATABASE_URL,

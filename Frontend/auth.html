@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smooth Auth</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #0a0a0a;
+      background-image:
+        radial-gradient(ellipse at 20% 50%, rgba(120, 40, 200, 0.15) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(40, 100, 255, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 60% 80%, rgba(200, 40, 120, 0.1) 0%, transparent 50%);
+      padding: 20px;
+    }
+
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      animation: float 8s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::before {
+      width: 400px;
+      height: 400px;
+      background: rgba(120, 40, 200, 0.12);
+      top: -100px;
+      left: -100px;
+    }
+
+    body::after {
+      width: 350px;
+      height: 350px;
+      background: rgba(40, 100, 255, 0.1);
+      bottom: -80px;
+      right: -80px;
+      animation-delay: -4s;
+    }
+
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: translate(0, 0) scale(1);
+      }
+
+      50% {
+        transform: translate(30px, 20px) scale(1.05);
+      }
+    }
+
+    .container {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+      height: 560px;
+      background: rgba(15, 15, 15, 0.97);
+      border-radius: 40px;
+      overflow: hidden;
+      z-index: 1;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    }
+
+    /* ── FORMS ── */
+    .form {
+      position: absolute;
+      width: 50%;
+      height: 100%;
+      padding: 50px 55px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      transition: opacity 0.4s ease;
+    }
+
+    .register {
+      left: 0;
+      color: #fff;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .login {
+      right: 0;
+      color: #fff;
+    }
+
+    .form.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    h1 {
+      margin-bottom: 30px;
+      font-size: 1.8rem;
+      background: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.65) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ── FLOATING LABEL INPUT ── */
+    .input-group {
+      position: relative;
+      margin-bottom: 10px;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 20px 16px 8px 16px;
+      border-radius: 14px;
+      border: 1.5px solid rgba(255, 255, 255, 0.07);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+      transition:
+        border-color 0.35s ease,
+        box-shadow 0.35s ease,
+        background 0.35s ease,
+        transform 0.2s ease;
+    }
+
+    .input-group input::placeholder {
+      color: transparent;
+    }
+
+    /* Floating label */
+    .input-group label {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(255, 255, 255, 0.35);
+      font-size: 0.92rem;
+      pointer-events: none;
+      transition:
+        top 0.25s cubic-bezier(.4, 0, .2, 1),
+        font-size 0.25s cubic-bezier(.4, 0, .2, 1),
+        color 0.25s ease,
+        transform 0.25s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    .input-group input:focus~label,
+    .input-group input:not(:placeholder-shown)~label {
+      top: 8px;
+      transform: translateY(0);
+      font-size: 0.68rem;
+      color: rgba(160, 120, 255, 0.85);
+      letter-spacing: 0.03em;
+    }
+
+    /* Animated underline bar */
+    .input-group::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      width: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #a078ff, #4060ff);
+      border-radius: 2px;
+      transition: width 0.35s cubic-bezier(.4, 0, .2, 1), left 0.35s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    .input-group:focus-within::after {
+      width: 100%;
+      left: 0;
+    }
+
+    /* Focus glow + lift */
+    .input-group input:focus {
+      border-color: rgba(160, 100, 255, 0.5);
+      background: rgba(255, 255, 255, 0.09);
+      box-shadow:
+        0 0 0 3px rgba(150, 100, 255, 0.12),
+        0 8px 25px rgba(0, 0, 0, 0.3);
+      transform: translateY(-2px);
+    }
+
+    /* Validation */
+    .input-group input.invalid {
+      border-color: rgba(255, 70, 70, 0.65);
+      box-shadow: 0 0 0 3px rgba(255, 70, 70, 0.12), 0 8px 25px rgba(0, 0, 0, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .input-group input.valid {
+      border-color: rgba(60, 210, 110, 0.55);
+      box-shadow: 0 0 0 3px rgba(60, 210, 110, 0.1), 0 8px 25px rgba(0, 0, 0, 0.3);
+      transform: translateY(-2px);
+    }
+
+    /* tick / cross icons inside input */
+    .input-group .status-icon {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.85rem;
+      opacity: 0;
+      transition: opacity 0.25s ease, transform 0.3s cubic-bezier(.34, 1.56, .64, 1);
+      pointer-events: none;
+    }
+
+    .input-group input.valid~.status-icon.ok {
+      opacity: 1;
+      transform: translateY(-50%) scale(1.2);
+    }
+
+    .input-group input.invalid~.status-icon.err {
+      opacity: 1;
+      transform: translateY(-50%) scale(1.2);
+    }
+
+    .error-msg {
+      font-size: 0.69rem;
+      color: rgba(255, 90, 90, 0.9);
+      margin-top: 3px;
+      margin-bottom: 8px;
+      padding-left: 4px;
+      display: none;
+      animation: fadeSlideIn 0.25s ease;
+    }
+
+    @keyframes fadeSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .error-msg.show {
+      display: block;
+    }
+
+    /* password toggle */
+    .toggle-pw {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 1rem;
+      transition: color 0.2s, transform 0.2s;
+      display: flex;
+      align-items: center;
+    }
+
+    .toggle-pw:hover {
+      color: rgba(255, 255, 255, 0.75);
+      transform: translateY(-50%) scale(1.15);
+    }
+
+    input.pw {
+      padding-right: 44px;
+    }
+
+    /* ── SUBMIT BUTTON ── */
+    .btn-submit {
+      width: 100%;
+      padding: 15px;
+      margin-top: 6px;
+      border: none;
+      border-radius: 14px;
+      /* default: white */
+      background: #ffffff;
+      color: #111;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+
+      /* smooth color + shadow transition */
+      transition:
+        background 0.4s cubic-bezier(.4, 0, .2, 1),
+        color 0.4s cubic-bezier(.4, 0, .2, 1),
+        box-shadow 0.3s ease,
+        transform 0.18s ease;
+
+      box-shadow: 0 4px 18px rgba(255, 255, 255, 0.12);
+    }
+
+    /* White → Red sweep on hover using pseudo element */
+    .btn-submit::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, #ff2244 0%, #ff5533 100%);
+      transform: scaleX(0);
+      transform-origin: left center;
+      transition: transform 0.45s cubic-bezier(.77, 0, .18, 1);
+      z-index: 0;
+      border-radius: 14px;
+    }
+
+    .btn-submit:hover::before {
+      transform: scaleX(1);
+    }
+
+    .btn-submit:hover {
+      color: #fff;
+      box-shadow: 0 8px 32px rgba(255, 34, 68, 0.45), 0 2px 8px rgba(0, 0, 0, 0.2);
+      transform: translateY(-3px);
+    }
+
+    .btn-submit:active {
+      transform: scale(0.97) translateY(0);
+      box-shadow: 0 2px 10px rgba(255, 34, 68, 0.3);
+    }
+
+    .btn-submit .btn-text,
+    .btn-submit .spinner {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      display: none;
+    }
+
+    .btn-submit.loading .spinner {
+      display: block;
+    }
+
+    .btn-submit.loading .btn-text {
+      opacity: 0.5;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Ripple */
+    .btn-submit .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(0);
+      animation: ripple 0.55s ease-out forwards;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    @keyframes ripple {
+      to {
+        transform: scale(5);
+        opacity: 0;
+      }
+    }
+
+    /* ── SHAKE ── */
+    @keyframes shake {
+
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      15% {
+        transform: translateX(-9px);
+      }
+
+      30% {
+        transform: translateX(8px);
+      }
+
+      45% {
+        transform: translateX(-6px);
+      }
+
+      60% {
+        transform: translateX(5px);
+      }
+
+      75% {
+        transform: translateX(-3px);
+      }
+
+      90% {
+        transform: translateX(2px);
+      }
+    }
+
+    .shake {
+      animation: shake 0.5s ease;
+    }
+
+    /* ── OVERLAY ── */
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 50%;
+      height: 100%;
+      background: linear-gradient(160deg, #ffffff 0%, #f2f2f2 100%);
+      border-radius: 40px;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      transition:
+        left 0.6s cubic-bezier(.77, 0, .18, 1),
+        width 0.6s cubic-bezier(.77, 0, .18, 1),
+        border-radius 0.6s cubic-bezier(.77, 0, .18, 1);
+      box-shadow: 4px 0 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .overlay-content {
+      max-width: 280px;
+      padding: 20px;
+    }
+
+    .overlay-content h2 {
+      font-size: 1.6rem;
+      margin-bottom: 10px;
+      color: #111;
+    }
+
+    .overlay-content p {
+      color: #666;
+      margin-bottom: 24px;
+      font-size: 0.9rem;
+    }
+
+    /* Switch button — also white → red */
+    .switch {
+      padding: 12px 36px;
+      background: #fff;
+      border: 2px solid #111;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #111;
+      font-size: 0.9rem;
+      position: relative;
+      overflow: hidden;
+      transition:
+        color 0.4s cubic-bezier(.4, 0, .2, 1),
+        border-color 0.4s ease,
+        transform 0.18s ease,
+        box-shadow 0.25s ease;
+    }
+
+    .switch::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, #ff2244 0%, #ff5533 100%);
+      transform: scaleX(0);
+      transform-origin: left center;
+      transition: transform 0.45s cubic-bezier(.77, 0, .18, 1);
+      z-index: 0;
+    }
+
+    .switch:hover::before {
+      transform: scaleX(1);
+    }
+
+    .switch:hover {
+      color: #fff;
+      border-color: transparent;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 22px rgba(255, 34, 68, 0.4);
+    }
+
+    .switch:active {
+      transform: scale(0.97);
+    }
+
+    .switch span {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── MOBILE ── */
+    @media(max-width:650px) {
+      .container {
+        height: auto;
+        min-height: 500px;
+        border-radius: 28px;
+        overflow: visible;
+      }
+
+      .form {
+        width: 100%;
+        position: relative;
+        left: 0 !important;
+        right: 0 !important;
+        padding: 40px 28px;
+        display: none;
+      }
+
+      .form.active {
+        display: flex;
+      }
+
+      .overlay {
+        position: relative;
+        width: 100% !important;
+        left: 0 !important;
+        border-radius: 0 0 28px 28px !important;
+        min-height: 160px;
+        box-shadow: none;
+        transition: none;
+      }
+
+      .container {
+        flex-direction: column;
+        display: flex;
+      }
+    }
+
+    /* ── Navigation ── */
+    .noir-nav {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      height: 60px;
+      background: #000000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 2rem;
+      z-index: 1000;
+      border-bottom: 1px solid #1A1A1A;
+    }
+
+    .nav-logo-section {
+      color: #FFFFFF;
+      font-family: 'Inter', sans-serif;
+      font-weight: 900;
+      font-size: 1.25rem;
+      letter-spacing: -0.05em;
+      text-transform: uppercase;
+    }
+
+    .nav-links-section {
+      display: flex;
+      gap: 0.5rem;
+      height: 100%;
+    }
+
+    .noir-nav a {
+      color: #888888;
+      text-decoration: none;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 0 1.5rem;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+    }
+
+    .noir-nav a.active {
+      background: #FF0000;
+      color: #FFFFFF;
+    }
+
+    .noir-nav a:hover:not(.active) {
+      color: #FFFFFF;
+      background: rgba(255, 255, 255, 0.05);
+    }
+  </style>
+  <script>
+    // Auth guard: if user already logged in, skip to profile
+    const savedUser = localStorage.getItem('ffte_user');
+    if (savedUser) {
+      try {
+        const user = JSON.parse(savedUser);
+        document.cookie = "ffte_auth_sync=1; path=/";
+        window.location.replace(`http://localhost:3000/profile.html?username=${encodeURIComponent(user.username)}&loggedIn=true`);
+      } catch (e) {
+        localStorage.removeItem('ffte_user');
+        document.cookie = "ffte_auth_sync=; path=/; max-age=0";
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('ffte_user');
+      document.cookie = "ffte_auth_sync=; path=/; max-age=0";
+      window.location.href = 'auth.html';
+    }
+  </script>
+</head>
+
+<body>
+  <nav class="noir-nav">
+    <div class="nav-logo-section" style="display: flex; align-items: center; gap: 12px;">
+      <img src="assets/logo.png" alt="FFTE" style="height: 48px;">
+    </div>
+    <div class="nav-links-section" id="nav-links"></div>
+  </nav>
+
+  <script>
+    const navLinks = document.getElementById('nav-links');
+    const isLoggedIn = !!localStorage.getItem('ffte_user');
+    navLinks.innerHTML = `
+          <a href="http://localhost:5173/">00 HOME</a>
+          <a href="http://localhost:3000/command-center.html">01 COMMAND CENTER</a>
+          <a href="http://localhost:3000/the-lab.html">02 THE LAB</a>
+          <a href="http://localhost:3000/war-room.html">03 WAR ROOM</a>
+          ${isLoggedIn ? `
+              <a href="http://localhost:3000/profile.html">04 PROFILE</a>
+              <a href="#" onclick="logout(); return false;" class="nav-link" style="color: #FF0000; border-left: 1px solid #333; margin-left: 10px;">LOGOUT</a>
+          ` : `
+              <a href="http://localhost:3000/auth.html" class="active" style="color: #FF0000; border-left: 1px solid #333; margin-left: 10px;">LOGIN</a>
+          `}
+      `;
+  </script>
+
+  <div class="container" id="container">
+
+    <!-- REGISTER -->
+    <div class="form register" id="registerForm">
+      <h1>Create Account</h1>
+
+      <div class="input-group">
+        <input type="text" id="reg-username" placeholder="Username"
+          oninput="liveValidate(this,'username','err-reg-username')">
+        <label for="reg-username">Username</label>
+        <span class="status-icon ok">✔</span>
+        <span class="status-icon err">✖</span>
+      </div>
+      <span class="error-msg" id="err-reg-username">At least 3 characters required.</span>
+
+      <div class="input-group">
+        <input type="text" id="reg-email" placeholder="Email" oninput="liveValidate(this,'email','err-reg-email')">
+        <label for="reg-email">Email</label>
+        <span class="status-icon ok">✔</span>
+        <span class="status-icon err">✖</span>
+      </div>
+      <span class="error-msg" id="err-reg-email">Enter a valid email address.</span>
+
+      <div class="input-group">
+        <input type="password" id="reg-password" class="pw" placeholder="Password"
+          oninput="liveValidate(this,'password','err-reg-password')">
+        <label for="reg-password">Password</label>
+        <button class="toggle-pw" type="button" onclick="togglePw('reg-password',this)" tabindex="-1">👁</button>
+      </div>
+      <span class="error-msg" id="err-reg-password">At least 6 characters required.</span>
+
+      <button class="btn-submit" id="btn-register" onclick="handleSubmit(event,this,'register')">
+        <div class="spinner"></div>
+        <span class="btn-text">Register</span>
+      </button>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="form login active" id="loginForm">
+      <h1>Welcome Back</h1>
+
+      <div class="input-group">
+        <input type="text" id="log-username" placeholder="Username"
+          oninput="liveValidate(this,'username','err-log-username')">
+        <label for="log-username">Username</label>
+        <span class="status-icon ok">✔</span>
+        <span class="status-icon err">✖</span>
+      </div>
+      <span class="error-msg" id="err-log-username">At least 3 characters required.</span>
+
+      <div class="input-group">
+        <input type="password" id="log-password" class="pw" placeholder="Password"
+          oninput="liveValidate(this,'password','err-log-password')">
+        <label for="log-password">Password</label>
+        <button class="toggle-pw" type="button" onclick="togglePw('log-password',this)" tabindex="-1">👁</button>
+      </div>
+      <span class="error-msg" id="err-log-password">At least 6 characters required.</span>
+
+      <button class="btn-submit" id="btn-login" onclick="handleSubmit(event,this,'login')">
+        <div class="spinner"></div>
+        <span class="btn-text">Login</span>
+      </button>
+    </div>
+
+    <!-- OVERLAY -->
+    <div class="overlay" id="overlay">
+      <div class="overlay-content" id="overlayContent">
+        <h2>Hello! 👋</h2>
+        <p>Don't have an account yet?</p>
+        <button class="switch" onclick="goRegister()"><span>Register</span></button>
+      </div>
+    </div>
+
+  </div>
+  <script>
+    /* ── OVERLAY TRANSITION ── */
+    const overlay = document.getElementById("overlay");
+    const loginF = document.getElementById("loginForm");
+    const registerF = document.getElementById("registerForm");
+    const content = document.getElementById("overlayContent");
+    let animating = false;
+
+
+
+    function setOverlay(left, width, radius, instant) {
+      overlay.style.transition = instant ? "none"
+        : "left 0.6s cubic-bezier(.77,0,.18,1),width 0.6s cubic-bezier(.77,0,.18,1),border-radius 0.6s cubic-bezier(.77,0,.18,1)";
+      overlay.style.left = left; overlay.style.width = width; overlay.style.borderRadius = radius;
+    }
+    function goRegister() {
+      if (animating) return; animating = true;
+      setOverlay("0", "100%", "40px", false);
+      setTimeout(() => {
+        loginF.classList.remove("active"); registerF.classList.add("active");
+        setOverlay("0", "100%", "40px", true); overlay.getBoundingClientRect();
+        setOverlay("50%", "50%", "40px", false);
+        content.innerHTML = `<h2>Welcome Back! 🙌</h2><p>Already have an account?</p><button class="switch" onclick="goLogin()"><span>Login</span></button>`;
+        setTimeout(() => { animating = false; }, 650);
+      }, 620);
+    }
+    function goLogin() {
+      if (animating) return; animating = true;
+      setOverlay("0", "100%", "40px", false);
+      setTimeout(() => {
+        registerF.classList.remove("active"); loginF.classList.add("active");
+        setOverlay("0", "100%", "40px", true); overlay.getBoundingClientRect();
+        setOverlay("0", "50%", "40px", false);
+        content.innerHTML = `<h2>Hello! 👋</h2><p>Don't have an account yet?</p><button class="switch" onclick="goRegister()"><span>Register</span></button>`;
+        setTimeout(() => { animating = false; }, 650);
+      }, 620);
+    }
+
+    /* ── PASSWORD TOGGLE ── */
+    function togglePw(id, btn) {
+      const inp = document.getElementById(id);
+      inp.type = inp.type === "password" ? "text" : "password";
+      btn.textContent = inp.type === "password" ? "👁" : "🙈";
+    }
+
+    /* ── VALIDATION RULES ── */
+    const rules = {
+      username: v => v.trim().length >= 3,
+      email: v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()),
+      password: v => v.length >= 6,
+    };
+
+    function liveValidate(input, type, errId) {
+      const ok = rules[type](input.value);
+      const hasVal = input.value.length > 0;
+      input.classList.toggle("valid", ok);
+      input.classList.toggle("invalid", !ok && hasVal);
+      if (errId) {
+        const err = document.getElementById(errId);
+        err.classList.toggle("show", !ok && hasVal);
+      }
+      return ok;
+    }
+
+    function validateAll(fields) {
+      let allOk = true;
+      fields.forEach(({ id, type, errId }) => {
+        const inp = document.getElementById(id);
+        const ok = rules[type](inp.value);
+        inp.classList.toggle("valid", ok);
+        inp.classList.toggle("invalid", !ok);
+        document.getElementById(errId).classList.toggle("show", !ok);
+        if (!ok) allOk = false;
+      });
+      return allOk;
+    }
+
+    /* ── RIPPLE ── */
+    function addRipple(btn, e) {
+      if (!btn) return;
+      const r = document.createElement("span");
+      const rect = btn.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height) * 1.5;
+      r.className = "ripple";
+      const x = (e && e.clientX) ? e.clientX : rect.left + rect.width / 2;
+      const y = (e && e.clientY) ? e.clientY : rect.top + rect.height / 2;
+      r.style.cssText = `width:${size}px;height:${size}px;left:${x - rect.left - size / 2}px;top:${y - rect.top - size / 2}px`;
+      btn.appendChild(r);
+      setTimeout(() => r.remove(), 600);
+    }
+
+    /* ── SHAKE ── */
+    function shakeForm(id) {
+      const f = document.getElementById(id);
+      f.classList.remove("shake"); void f.offsetWidth; f.classList.add("shake");
+      setTimeout(() => f.classList.remove("shake"), 500);
+    }
+
+    /* ── SUBMIT ── */
+    function handleSubmit(e, btn, mode) {
+      addRipple(btn, e);
+      const fields = mode === "register"
+        ? [
+          { id: "reg-username", type: "username", errId: "err-reg-username" },
+          { id: "reg-email", type: "email", errId: "err-reg-email" },
+          { id: "reg-password", type: "password", errId: "err-reg-password" },
+        ]
+        : [
+          { id: "log-username", type: "username", errId: "err-log-username" },
+          { id: "log-password", type: "password", errId: "err-log-password" },
+        ];
+
+      if (!validateAll(fields)) {
+        shakeForm(mode === "register" ? "registerForm" : "loginForm");
+        return;
+      }
+      btn.classList.add("loading"); btn.disabled = true;
+      setTimeout(() => {
+        btn.classList.remove("loading"); btn.disabled = false;
+
+        // Save user info locally
+        const inputId = mode === "register" ? "reg-username" : "log-username";
+        const username = document.getElementById(inputId).value;
+        const userData = { username: username, loggedIn: true };
+        localStorage.setItem('ffte_user', JSON.stringify(userData));
+        document.cookie = "ffte_auth_sync=1; path=/";
+
+        btn.querySelector(".btn-text").textContent = mode === "register" ? "✓ Registered!" : "✓ Logged In!";
+        setTimeout(() => {
+          // Sync with the backend port 3000
+          window.location.href = `http://localhost:3000/profile.html?username=${encodeURIComponent(username)}&loggedIn=true`;
+        }, 2200);
+      }, 1800);
+    }
+  </script>
+</body>
+
+</html>

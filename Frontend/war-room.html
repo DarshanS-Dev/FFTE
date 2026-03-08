@@ -10,16 +10,35 @@
 </head>
 
 <body>
+    <script>
+        // Removed restrictive auth block so user can navigate directly
+        function logout() {
+            localStorage.removeItem('ffte_user');
+            window.location.href = 'auth.html';
+        }
+    </script>
     <nav class="noir-nav">
         <div class="nav-logo-section" style="display: flex; align-items: center; gap: 12px;">
             <img src="assets/logo.png" alt="FFTE" style="height: 48px;">
         </div>
-        <div class="nav-links-section">
-            <a href="http://localhost:5173">00 HOME</a>
+        <div class="nav-links-section" id="nav-links"></div>
+    </nav>
+    <script>
+        const navLinks = document.getElementById('nav-links');
+        const isLoggedIn = !!localStorage.getItem('ffte_user');
+        navLinks.innerHTML = `
+            <a href="http://localhost:5173/">00 HOME</a>
             <a href="http://localhost:3000/command-center.html">01 COMMAND CENTER</a>
             <a href="http://localhost:3000/the-lab.html">02 THE LAB</a>
             <a href="http://localhost:3000/war-room.html" class="active">03 WAR ROOM</a>
-        </div>
+            ${isLoggedIn ? `
+                <a href="http://localhost:3000/profile.html">04 PROFILE</a>
+                <a href="#" onclick="logout(); return false;" class="nav-link" style="color: #FF0000; border-left: 1px solid #333; margin-left: 10px;">LOGOUT</a>
+            ` : `
+                <a href="http://localhost:3000/auth.html" class="nav-link" style="color: #FF0000; border-left: 1px solid #333; margin-left: 10px;">LOGIN</a>
+            `}
+        `;
+    </script>
     </nav>
 
     <div class="high-noir-container">
