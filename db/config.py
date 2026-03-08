@@ -15,10 +15,9 @@ from db import models
 
 logger = logging.getLogger("ffte.db")
 
-DATABASE_URL: str = os.getenv(
-    "DATABASE_URL",
-    "postgresql://faulty:password@localhost:5432/ffte",
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    logger.warning("DATABASE_URL not set — database features will be unavailable.")
 
 engine = create_engine(
     DATABASE_URL,
